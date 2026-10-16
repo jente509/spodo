@@ -100,7 +100,6 @@ If YouTube prompts you with *"Sign in to confirm you’re not a bot"*:
 <a name="-contributors"></a>
 ## 👥 Contributors
 
-This project is co-created with love and pure vibes:
 
 | Contributor | Role | Link |
 | :--- | :--- | :--- |
