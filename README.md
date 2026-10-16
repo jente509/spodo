@@ -100,11 +100,30 @@ If YouTube prompts you with *"Sign in to confirm you’re not a bot"*:
 <a name="-contributors"></a>
 ## 👥 Contributors
 
+This project exists thanks to pure vibes and collaboration:
 
-| Contributor | Role | Link |
-| :--- | :--- | :--- |
-| 🧑‍🎤 **Jente** | Vision & Chief Vibe Officer *(NOT a developer, has no clue how it works)* | [@jente509](https://github.com/jente509) |
-| 🤖 **Gemini** | Code Architect, Full-Stack Engineer & Actual Developer | [Google DeepMind](https://deepmind.google/technologies/gemini/) |
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="220">
+        <a href="https://github.com/jente509">
+          <img src="https://github.com/jente509.png" width="100px;" style="border-radius:50%;" alt="Jente"/><br />
+          <sub><b>Jente (@jente509)</b></sub>
+        </a><br />
+        <sub>🧑‍🎤 <b>Vision & Chief Vibe Officer</b><br/><i>(NOT a developer, has no clue how it works)</i></sub><br /><br />
+        <span>💡 Ideas &bull; 🎵 Music Taste &bull; 💬 Prompts</span>
+      </td>
+      <td align="center" valign="top" width="220">
+        <a href="https://deepmind.google/technologies/gemini/">
+          <img src="https://raw.githubusercontent.com/google-deepmind/materials/main/gemini_logo.png" onerror="this.src='https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg'" width="100px;" alt="Gemini"/><br />
+          <sub><b>Gemini (Google DeepMind)</b></sub>
+        </a><br />
+        <sub>🤖 <b>AI Code Architect & Developer</b><br/><i>(The one actually writing all the code)</i></sub><br /><br />
+        <span>💻 Code &bull; 🏗️ Architecture &bull; 🐛 Bug Fixes</span>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 
