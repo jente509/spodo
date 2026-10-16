@@ -5,30 +5,27 @@
 **A sleek, high-performance desktop Spotify playlist, album, and track downloader with embedded ID3 metadata, album artwork, bilingual UI, and automated YouTube anti-bot bypass.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Vibe Coded](https://img.shields.io/badge/Vibe%20Coded-100%25-ff69b4?style=for-the-badge&logo=visual-studio-code&logoColor=white)](#-100-vibe-coded-disclaimer)
-[![Pair Programmed with Gemini](https://img.shields.io/badge/Pair%20Programmed%20with-Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
+[![Pair Programmed with Gemini](https://img.shields.io/badge/AI%20Assisted-Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
 [![CustomTkinter](https://img.shields.io/badge/GUI-CustomTkinter-8b5cf6?style=for-the-badge)](https://github.com/TomSchimansky/CustomTkinter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 
-[Features](#-key-features) • [Quickstart](#-quickstart) • [Anti-Bot Bypass](#-preventing-youtube-bot-blocks) • [Vibe Disclaimer](#-100-vibe-coded-disclaimer) • [Contributors](#-contributors)
+[Features](#-key-features) • [Quickstart](#-quickstart) • [Anti-Bot Bypass](#-preventing-youtube-bot-blocks) • [About](#-about) • [Contributors](#-contributors)
 
 ---
 
 </div>
 
 > [!TIP]
-> 🇳🇱 **Nederlandstalig?** Spodo is met trots bedacht door een Nederlander en bevat volledige Nederlandstalige ondersteuning! (En even voor de goede orde: Jente is **GEEN developer** en weet echt geen bal van hoe de code onder de motorkap werkt – dit is 100% pure AI vibe-coding!). Schakel in de app direct tussen Nederlands en Engels via de knop rechtsboven (`🇳🇱 NL`).
+> 🇳🇱 **Nederlandstalig?** Spodo is bedacht door een Nederlandse IT-student en bevat volledige ondersteuning voor Nederlands en Engels. Wissel direct tussen talen via de knop rechtsboven (`🇳🇱 NL`).
 
-> [!WARNING]
-> <a name="-100-vibe-coded-disclaimer"></a>
-> ###  100% Vibe-Coded Disclaimer (I am NOT a developer!)
-> **Let's make one thing crystal clear: i am NOT a software developer.**
-> Seriously—zero programming background, no CS degree, and absolutely **no clue** how any of this code actually runs under the hood.
-> I do study IT but that does not mean i know code
+> [!NOTE]
+> <a name="-about"></a>
+> ### ℹ️ Project Context
+> **Full disclosure:** I am an IT student, not a software developer, and don't know the deep ins and outs of how this code runs under the hood.
 > 
-> **Gemini** (Google DeepMind) wrote every single line of Python, designed the architecture, fixed the bugs, and did all the technical heavy lifting.
+> Frustrated by existing downloaders breaking or getting blocked by YouTube bot checks, I built Spodo together with **Google Gemini**, which handled the Python architecture, code, and bug fixes.
 > 
-> If something breaks, crashes, or throws an error: please do **not** ask me for technical support, because you will only receive a completely blank stare. File an issue and let Gemini figure it out!
+> If you encounter any bugs, feel free to open a [GitHub Issue](https://github.com/jente509/spodo/issues)!
 
 ---
 
@@ -100,28 +97,10 @@ If YouTube prompts you with *"Sign in to confirm you’re not a bot"*:
 <a name="-contributors"></a>
 ## 👥 Contributors
 
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="220">
-        <a href="https://github.com/jente509">
-          <img src="https://github.com/jente509.png" width="100px;" style="border-radius:50%;" alt="Jente"/><br />
-          <sub><b>Jente (@jente509)</b></sub>
-        </a><br />
-        <sub>🧑‍🎤 <b>Vision & Chief Vibe Officer</b><br/><i>(NOT a developer, has no clue how it works)</i></sub><br /><br />
-        <span>💡 Ideas &bull; 🎵 Music Taste &bull; 💬 Prompts</span>
-      </td>
-      <td align="center" valign="top" width="220">
-        <a href="https://deepmind.google/technologies/gemini/">
-          <img src="https://raw.githubusercontent.com/google-deepmind/materials/main/gemini_logo.png" onerror="this.src='https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg'" width="100px;" alt="Gemini"/><br />
-          <sub><b>Gemini (Google DeepMind)</b></sub>
-        </a><br />
-        <sub>🤖 <b>AI Code Architect & Developer</b><br/><i>(The one actually writing all the code)</i></sub><br /><br />
-        <span>💻 Code &bull; 🏗️ Architecture &bull; 🐛 Bug Fixes</span>
-      </td>
-    </tr>
-  </tbody>
-</table>
+| Contributor | Role |
+| :--- | :--- |
+| **[Jente (@jente509)](https://github.com/jente509)** | Project Creator *(IT student)* |
+| **[Gemini (Google DeepMind)](https://deepmind.google/technologies/gemini/)** | AI Code Architecture & Development |
 
 ---
 

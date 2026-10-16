@@ -24,6 +24,9 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "cookies_browser_nocount": "🍪 {source}",
         
         # Bovenbalk knoppen
+        "info_btn": "ℹ️ Info",
+        "about_title": "ℹ️  Over Spodo",
+        "close": "Sluiten",
         "theme_toggle_tip": "Wissel licht/donker thema",
         "lang_toggle_tip": "Switch language / Wissel taal",
 
@@ -154,6 +157,9 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "cookies_browser_nocount": "🍪 {source}",
 
         # Top bar buttons
+        "info_btn": "ℹ️ Info",
+        "about_title": "ℹ️  About Spodo",
+        "close": "Close",
         "theme_toggle_tip": "Toggle Light / Dark mode",
         "lang_toggle_tip": "Switch language / Wissel taal",
 

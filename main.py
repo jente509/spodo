@@ -349,12 +349,12 @@ class SettingsDialog(ctk.CTkToplevel):
 # ══════════════════════════════════════════════════════════════════
 
 class AboutDialog(ctk.CTkToplevel):
-    """Vibe-coded disclaimer & info pop-up."""
+    """Over Spodo / Info pop-up."""
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("✨ Spodo — Vibe-Coded Edition")
-        self.geometry("500x440")
+        self.title(t("about_title"))
+        self.geometry("480x370")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
@@ -370,40 +370,31 @@ class AboutDialog(ctk.CTkToplevel):
         ).pack(pady=(0, 14))
 
         card = ctk.CTkFrame(self, fg_color=CARD_BG, corner_radius=12)
-        card.pack(fill="both", expand=True, padx=20, pady=(0, 16))
+        card.pack(fill="both", expand=True, padx=22, pady=(0, 16))
 
-        badge = ctk.CTkFrame(card, fg_color=("#fce7f3", "#831843"), corner_radius=10)
-        badge.pack(pady=(14, 8))
-        ctk.CTkLabel(
-            badge, text="🧘‍♂️ 100% VIBE-CODED",
-            font=ctk.CTkFont(size=11, weight="bold"), text_color=("#be185d", "#fbcfe8"),
-        ).pack(padx=10, pady=3)
-
-        vibe_msg = (
-            "Dit project is in real-time gebouwd via een organische\n"
-            "AI pair-programming sessie tussen:\n\n"
-            "🧑‍🎤 Jente (@jente509) — Vision & Vibe Curator\n"
-            "(is GEEN developer en weet geen bal van hoe dit draait!)\n"
-            "🤖 Gemini (Google DeepMind) — Code Architect & Echte Developer\n\n"
-            "Aangedreven door pure muziekliefde en AI-vibes. Geen garanties,\n"
-            "puur voor plezier. Geniet van je tracks! 🎧✨"
+        info_msg = (
+            "Spodo is een open-source muziekdownloader, gebouwd door Jente\n"
+            "in samenwerking met Google Gemini.\n\n"
+            "🧑‍💻 Jente (@jente509) — Projectbedenker (IT-student)\n"
+            "🤖 Google Gemini — Code architectuur & ontwikkeling\n\n"
+            "Gemaakt uit frustratie met haperende downloaders en bot-blokkades.\n"
+            "Veel luisterplezier! 🎧"
             if get_language() == "nl" else
-            "This entire project was crafted in real-time through an\n"
-            "organic AI pair-programming session between:\n\n"
-            "🧑‍🎤 Jente (@jente509) — Vision & Vibe Curator\n"
-            "(is NOT a developer and has no clue how this runs!)\n"
-            "🤖 Gemini (Google DeepMind) — Code Architect & Actual Developer\n\n"
-            "Fueled by pure music passion and AI vibes. No warranties,\n"
-            "purely built for fun. Enjoy your tunes! 🎧✨"
+            "Spodo is an open-source Spotify downloader, built by Jente\n"
+            "in collaboration with Google Gemini.\n\n"
+            "🧑‍💻 Jente (@jente509) — Project Creator (IT Student)\n"
+            "🤖 Google Gemini — Code Architecture & Development\n\n"
+            "Built out of frustration with broken downloaders and bot blocks.\n"
+            "Enjoy your music! 🎧"
         )
 
         ctk.CTkLabel(
-            card, text=vibe_msg,
+            card, text=info_msg,
             font=ctk.CTkFont(size=12), justify="center", text_color=TEXT_PRIMARY,
-        ).pack(padx=16, pady=(4, 14))
+        ).pack(padx=16, pady=24)
 
         ctk.CTkButton(
-            self, text="Keep Vibing ✌️", width=140, height=32,
+            self, text=t("close"), width=120, height=32,
             fg_color=SPOTIFY_GREEN, hover_color=SPOTIFY_GREEN_HOVER,
             command=self.destroy,
         ).pack(pady=(0, 18))
@@ -639,15 +630,15 @@ class SpodoApp(ctk.CTk):
             font=ctk.CTkFont(size=22, weight="bold"), text_color=SPOTIFY_GREEN,
         ).pack(side="left")
 
-        self._vibe_badge = ctk.CTkButton(
-            brand_frame, text="✨ vibe-coded", width=95, height=24,
-            fg_color=("#fce7f3", "#831843"), hover_color=("#fbcfe8", "#9d174d"),
-            text_color=("#be185d", "#fbcfe8"),
+        self._info_btn = ctk.CTkButton(
+            brand_frame, text=t("info_btn"), width=65, height=24,
+            fg_color=CARD_BG, hover_color=ACCENT,
+            text_color=TEXT_SECONDARY,
             font=ctk.CTkFont(size=11, weight="bold"),
             corner_radius=12,
             command=self._open_about,
         )
-        self._vibe_badge.pack(side="left", padx=(10, 0))
+        self._info_btn.pack(side="left", padx=(10, 0))
 
         # Rechter knoppen
         btn_frame = ctk.CTkFrame(row1, fg_color="transparent")
@@ -765,6 +756,7 @@ class SpodoApp(ctk.CTk):
     def _apply_translations(self):
         """Werk alle zichtbare UI-elementen bij naar de geselecteerde taal."""
         self.title(t("app_title"))
+        self._info_btn.configure(text=t("info_btn"))
         self._lang_btn.configure(text="🇬🇧 EN" if get_language() == "nl" else "🇳🇱 NL")
         self._logout_btn.configure(text=t("logout"))
         if not (self.sp_client and self.sp_client.is_logged_in()):
