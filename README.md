@@ -17,14 +17,17 @@
 </div>
 
 > [!TIP]
-> 🇳🇱 **Nederlandstalig?** Spodo is met trots gebouwd door een Nederlandse developer en bevat volledige Nederlandstalige ondersteuning! Je kunt in de app direct met één klik schakelen tussen Nederlands en Engels via de knop rechtsboven (`🇳🇱 NL`).
+> 🇳🇱 **Nederlandstalig?** Spodo is met trots bedacht door een Nederlander en bevat volledige Nederlandstalige ondersteuning! (En even voor de goede orde: Jente is **GEEN developer** en weet echt geen bal van hoe de code onder de motorkap werkt – dit is 100% pure AI vibe-coding!). Schakel in de app direct tussen Nederlands en Engels via de knop rechtsboven (`🇳🇱 NL`).
 
-> [!IMPORTANT]
+> [!WARNING]
 > <a name="-100-vibe-coded-disclaimer"></a>
-> ### 🧘‍♂️ 100% Vibe-Coded Disclaimer
-> This entire project was brainstormed, architected, and vibe-coded live through an organic pair-programming session between **Jente** ([@jente509](https://github.com/jente509)) and **Gemini** (Google DeepMind).
+> ### 🧘‍♂️ 100% Vibe-Coded Disclaimer (Jente is NOT a developer!)
+> **Let's make one thing crystal clear: Jente is NOT a software developer.**
+> Seriously—zero programming background, no CS degree, and absolutely **no clue** how any of this code actually runs under the hood. 
 > 
-> Driven purely by music passion, caffeine, and immaculate AI vibes. Things might be wild under the hood, but it runs like a dream. Built for fun, personal use, and pristine vibes! 🎧✨
+> Jente brought the vision, the music taste, the ideas, and the raw prompts. **Gemini** (Google DeepMind) wrote every single line of Python, designed the architecture, fixed the bugs, and did all the technical heavy lifting.
+> 
+> If something breaks, crashes, or throws an error: please do **not** ask Jente for technical support, because you will only receive a completely blank stare. File an issue and let Gemini figure it out! Pure vibes only. 🎧✨
 
 ---
 
@@ -96,12 +99,12 @@ If YouTube prompts you with *"Sign in to confirm you’re not a bot"*:
 <a name="-contributors"></a>
 ## 👥 Contributors
 
-This project is co-created with love:
+This project is co-created with love and pure vibes:
 
 | Contributor | Role | Link |
 | :--- | :--- | :--- |
-| 🧑‍💻 **Jente** | Creator, Project Lead & Vibe Curator | [@jente509](https://github.com/jente509) |
-| 🤖 **Gemini** | AI Pair Programmer & Code Architect | [Google DeepMind](https://deepmind.google/technologies/gemini/) |
+| 🧑‍🎤 **Jente** | Vision, Music Taste & Chief Vibe Officer *(NOT a developer, has no clue how it works)* | [@jente509](https://github.com/jente509) |
+| 🤖 **Gemini** | Code Architect, Full-Stack Engineer & Actual Developer | [Google DeepMind](https://deepmind.google/technologies/gemini/) |
 
 ---
 

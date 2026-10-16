@@ -381,20 +381,20 @@ class AboutDialog(ctk.CTkToplevel):
 
         vibe_msg = (
             "Dit project is in real-time gebouwd via een organische\n"
-            "AI pair-programming vibe sessie tussen:\n\n"
-            "🧑‍💻 Jente (@jente509) — Bedenker & Vibe Curator\n"
-            "🤖 Gemini (Google DeepMind) — AI Co-Auteur & Code Architect\n\n"
-            "Aangedreven door pure liefde voor muziek, cafeïne en\n"
-            "uitstekende AI-vibes. Geen garanties, puur voor plezier\n"
-            "en eigen gebruik. Geniet van je tracks! 🎧✨"
+            "AI pair-programming sessie tussen:\n\n"
+            "🧑‍🎤 Jente (@jente509) — Vision & Vibe Curator\n"
+            "(is GEEN developer en weet geen bal van hoe dit draait!)\n"
+            "🤖 Gemini (Google DeepMind) — Code Architect & Echte Developer\n\n"
+            "Aangedreven door pure muziekliefde en AI-vibes. Geen garanties,\n"
+            "puur voor plezier. Geniet van je tracks! 🎧✨"
             if get_language() == "nl" else
             "This entire project was crafted in real-time through an\n"
-            "organic AI pair-programming vibe session between:\n\n"
-            "🧑‍💻 Jente (@jente509) — Creator & Vibe Curator\n"
-            "🤖 Gemini (Google DeepMind) — AI Co-Author & Code Architect\n\n"
-            "Fueled by pure music passion, caffeine, and immaculate\n"
-            "AI vibes. No warranties, purely built for fun and personal\n"
-            "use. Enjoy your tunes! 🎧✨"
+            "organic AI pair-programming session between:\n\n"
+            "🧑‍🎤 Jente (@jente509) — Vision & Vibe Curator\n"
+            "(is NOT a developer and has no clue how this runs!)\n"
+            "🤖 Gemini (Google DeepMind) — Code Architect & Actual Developer\n\n"
+            "Fueled by pure music passion and AI vibes. No warranties,\n"
+            "purely built for fun. Enjoy your tunes! 🎧✨"
         )
 
         ctk.CTkLabel(
