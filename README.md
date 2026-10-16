@@ -28,7 +28,7 @@
 > 
 > **Gemini** (Google DeepMind) wrote every single line of Python, designed the architecture, fixed the bugs, and did all the technical heavy lifting.
 > 
-> If something breaks, crashes, or throws an error: please do **not** ask me for technical support, because you will only receive a completely blank stare. File an issue and let Gemini figure it out! Pure vibes only.
+> If something breaks, crashes, or throws an error: please do **not** ask me for technical support, because you will only receive a completely blank stare. File an issue and let Gemini figure it out!
 
 ---
 
