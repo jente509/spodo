@@ -21,13 +21,14 @@
 
 > [!WARNING]
 > <a name="-100-vibe-coded-disclaimer"></a>
-> ### 🧘‍♂️ 100% Vibe-Coded Disclaimer (Jente is NOT a developer!)
-> **Let's make one thing crystal clear: Jente is NOT a software developer.**
-> Seriously—zero programming background, no CS degree, and absolutely **no clue** how any of this code actually runs under the hood. 
+> ###  100% Vibe-Coded Disclaimer (I am NOT a developer!)
+> **Let's make one thing crystal clear: i am NOT a software developer.**
+> Seriously—zero programming background, no CS degree, and absolutely **no clue** how any of this code actually runs under the hood.
+> I do study IT but that does not mean i know code
 > 
-> Jente brought the vision, the music taste, the ideas, and the raw prompts. **Gemini** (Google DeepMind) wrote every single line of Python, designed the architecture, fixed the bugs, and did all the technical heavy lifting.
+> **Gemini** (Google DeepMind) wrote every single line of Python, designed the architecture, fixed the bugs, and did all the technical heavy lifting.
 > 
-> If something breaks, crashes, or throws an error: please do **not** ask Jente for technical support, because you will only receive a completely blank stare. File an issue and let Gemini figure it out! Pure vibes only. 🎧✨
+> If something breaks, crashes, or throws an error: please do **not** ask me for technical support, because you will only receive a completely blank stare. File an issue and let Gemini figure it out! Pure vibes only.
 
 ---
 
@@ -103,7 +104,7 @@ This project is co-created with love and pure vibes:
 
 | Contributor | Role | Link |
 | :--- | :--- | :--- |
-| 🧑‍🎤 **Jente** | Vision, Music Taste & Chief Vibe Officer *(NOT a developer, has no clue how it works)* | [@jente509](https://github.com/jente509) |
+| 🧑‍🎤 **Jente** | Vision & Chief Vibe Officer *(NOT a developer, has no clue how it works)* | [@jente509](https://github.com/jente509) |
 | 🤖 **Gemini** | Code Architect, Full-Stack Engineer & Actual Developer | [Google DeepMind](https://deepmind.google/technologies/gemini/) |
 
 ---
@@ -112,5 +113,5 @@ This project is co-created with love and pure vibes:
 Distributed under the [MIT License](LICENSE).
 
 <div align="center">
-  <sub>Crafted with passion for music and AI vibes 🎵✨</sub>
+  <sub>Crafted because i wanted a downloader that works</sub>
 </div>
