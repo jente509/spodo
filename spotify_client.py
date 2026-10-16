@@ -29,12 +29,18 @@ class SpotifyClient:
 
     def _init_public(self) -> None:
         """Initialiseer in publieke modus (ClientCredentials)."""
-        auth_manager = SpotifyClientCredentials(
-            client_id=self.client_id,
-            client_secret=self.client_secret,
-        )
-        self.sp = spotipy.Spotify(auth_manager=auth_manager, requests_timeout=20)
         self.user_info = None
+        if not self.client_id or not self.client_secret:
+            self.sp = None
+            return
+        try:
+            auth_manager = SpotifyClientCredentials(
+                client_id=self.client_id,
+                client_secret=self.client_secret,
+            )
+            self.sp = spotipy.Spotify(auth_manager=auth_manager, requests_timeout=20)
+        except Exception:
+            self.sp = None
 
     def login_oauth(self) -> dict:
         """
@@ -171,45 +177,284 @@ class SpotifyClient:
             page = self.sp.next(page) if page.get("next") else None
         return tracks
 
-    def get_playlist_tracks(self, playlist_id: str) -> tuple[str, list[dict]]:
-        """Haal alle tracks van een playlist op (inclusief paginering)."""
-        result = self.sp.playlist(playlist_id)
-        name = result.get("name", "Playlist")
-        tracks_obj = result.get("tracks") or result.get("items")
-        if not tracks_obj:
-            tracks_obj = self.sp.playlist_items(playlist_id)
-        tracks = self._paginate(
-            tracks_obj,
-            lambda item: self._track_dict(
-                item.get("item") or item.get("track") or item if isinstance(item, dict) else {},
-                "",
-            ),
+    # ------------------------------------------------------------------
+    # Web Scraper & Embed Fallback Helpers
+    # (voor wanneer Spotify Web API 403 Forbidden of 404 geeft door API-beperkingen)
+    # ------------------------------------------------------------------
+
+    def _scrape_playlist(self, playlist_id: str) -> tuple[str, list[dict]]:
+        """Haal tracks van een playlist op via spotifyscraper of embed fallback."""
+        try:
+            from spotify_scraper import SpotifyClient as ScraperClient
+            with ScraperClient() as client:
+                p = client.get_playlist(playlist_id, max_tracks=None)
+                name = p.name or "Playlist"
+                tracks = []
+                for item in p.tracks:
+                    t = item.track
+                    if not t or not getattr(t, "id", None):
+                        continue
+                    art_url = t.images[0].url if t.images else ""
+                    if not art_url and t.album and getattr(t.album, "images", None):
+                        art_url = t.album.images[0].url
+                    album_name = t.album.name if t.album else ""
+                    artists = ", ".join([a.name for a in t.artists]) if t.artists else "Onbekend"
+                    tracks.append({
+                        "id": t.id,
+                        "name": t.name or "Onbekend",
+                        "artists": artists,
+                        "album": album_name,
+                        "album_art": art_url,
+                        "uri": getattr(t, "uri", "") or f"spotify:track:{t.id}",
+                        "url": f"https://open.spotify.com/track/{t.id}",
+                        "duration_ms": getattr(t, "duration_ms", 0) or 0,
+                        "track_number": getattr(t, "track_number", 0) or 0,
+                        "release_date": str(getattr(t, "release_date", "") or ""),
+                    })
+                if tracks:
+                    return name, tracks
+        except Exception:
+            pass
+
+        return self._scrape_playlist_embed(playlist_id)
+
+    def _scrape_playlist_embed(self, playlist_id: str) -> tuple[str, list[dict]]:
+        """Directe extractie via Spotify Embed Next.js data."""
+        import json
+        import requests
+        url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
+        r = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            timeout=15,
         )
+        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.DOTALL)
+        if not m:
+            raise ValueError(f"Kon playlist {playlist_id} niet ophalen (pagina onbereikbaar).")
+        data = json.loads(m.group(1))
+        entity = data.get("props", {}).get("pageProps", {}).get("state", {}).get("data", {}).get("entity", {})
+        name = entity.get("name") or entity.get("title") or "Playlist"
+        cover_art = ""
+        sources = entity.get("coverArt", {}).get("sources", [])
+        if sources and sources[0].get("url"):
+            cover_art = sources[0]["url"]
+
+        tracks = []
+        for item in entity.get("trackList", []):
+            uri = item.get("uri", "")
+            tid = uri.split(":")[-1] if uri else item.get("uid", "")
+            title = item.get("title") or "Onbekend"
+            subtitle = item.get("subtitle") or "Onbekend"
+            artists = subtitle.replace("\u00a0", " ").strip()
+            tracks.append({
+                "id": tid,
+                "name": title,
+                "artists": artists,
+                "album": name,
+                "album_art": cover_art,
+                "uri": uri,
+                "url": f"https://open.spotify.com/track/{tid}" if tid else "",
+                "duration_ms": item.get("duration") or 0,
+                "track_number": len(tracks) + 1,
+                "release_date": "",
+            })
+        if not tracks:
+            raise ValueError(f"Geen nummers gevonden in playlist {playlist_id}.")
         return name, tracks
 
-    def get_album_tracks(self, album_id: str) -> tuple[str, list[dict]]:
-        """Haal alle tracks van een album op."""
-        album = self.sp.album(album_id)
-        album_name = album.get("name", "Album")
-        album_images = album.get("images", [])
-        album_art = album_images[0]["url"] if album_images else ""
-        tracks_obj = album.get("tracks") or album.get("items")
-        tracks = self._paginate(
-            tracks_obj,
-            lambda item: self._track_dict(
-                item.get("item") or item.get("track") or item if isinstance(item, dict) else {},
-                album_name,
-                album_art,
-            ),
+    def _scrape_album(self, album_id: str) -> tuple[str, list[dict]]:
+        """Haal tracks van een album op via scraper of embed."""
+        try:
+            from spotify_scraper import SpotifyClient as ScraperClient
+            with ScraperClient() as client:
+                a = client.get_album(album_id)
+                album_name = a.name or "Album"
+                art_url = a.images[0].url if a.images else ""
+                tracks = []
+                for t in a.tracks:
+                    if not t or not getattr(t, "id", None):
+                        continue
+                    artists = ", ".join([art.name for art in t.artists]) if t.artists else "Onbekend"
+                    tracks.append({
+                        "id": t.id,
+                        "name": t.name or "Onbekend",
+                        "artists": artists,
+                        "album": album_name,
+                        "album_art": art_url,
+                        "uri": getattr(t, "uri", "") or f"spotify:track:{t.id}",
+                        "url": f"https://open.spotify.com/track/{t.id}",
+                        "duration_ms": getattr(t, "duration_ms", 0) or 0,
+                        "track_number": getattr(t, "track_number", 0) or 0,
+                        "release_date": str(getattr(a, "release_date", "") or ""),
+                    })
+                if tracks:
+                    return album_name, tracks
+        except Exception:
+            pass
+
+        import json
+        import requests
+        url = f"https://open.spotify.com/embed/album/{album_id}"
+        r = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            timeout=15,
         )
+        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.DOTALL)
+        if not m:
+            raise ValueError(f"Kon album {album_id} niet ophalen.")
+        data = json.loads(m.group(1))
+        entity = data.get("props", {}).get("pageProps", {}).get("state", {}).get("data", {}).get("entity", {})
+        album_name = entity.get("name") or entity.get("title") or "Album"
+        cover_art = ""
+        visual = entity.get("visualIdentity", {}).get("image", [])
+        if visual and visual[0].get("url"):
+            cover_art = visual[0]["url"]
+
+        tracks = []
+        for item in entity.get("trackList", []):
+            uri = item.get("uri", "")
+            tid = uri.split(":")[-1] if uri else item.get("uid", "")
+            title = item.get("title") or "Onbekend"
+            subtitle = item.get("subtitle") or "Onbekend"
+            artists = subtitle.replace("\u00a0", " ").strip()
+            tracks.append({
+                "id": tid,
+                "name": title,
+                "artists": artists,
+                "album": album_name,
+                "album_art": cover_art,
+                "uri": uri,
+                "url": f"https://open.spotify.com/track/{tid}" if tid else "",
+                "duration_ms": item.get("duration") or 0,
+                "track_number": len(tracks) + 1,
+                "release_date": str(entity.get("releaseDate") or ""),
+            })
         return album_name, tracks
 
+    def _scrape_track(self, track_id: str) -> tuple[str, list[dict]]:
+        """Haal metadata van een losse track op via scraper of embed."""
+        try:
+            from spotify_scraper import SpotifyClient as ScraperClient
+            with ScraperClient() as client:
+                t = client.get_track(track_id)
+                art_url = t.images[0].url if t.images else ""
+                if not art_url and t.album and getattr(t.album, "images", None):
+                    art_url = t.album.images[0].url
+                album_name = t.album.name if t.album else ""
+                artists = ", ".join([art.name for art in t.artists]) if t.artists else "Onbekend"
+                td = {
+                    "id": t.id,
+                    "name": t.name or "Onbekend",
+                    "artists": artists,
+                    "album": album_name,
+                    "album_art": art_url,
+                    "uri": getattr(t, "uri", "") or f"spotify:track:{t.id}",
+                    "url": f"https://open.spotify.com/track/{t.id}",
+                    "duration_ms": getattr(t, "duration_ms", 0) or 0,
+                    "track_number": getattr(t, "track_number", 0) or 0,
+                    "release_date": str(getattr(t, "release_date", "") or ""),
+                }
+                title = f"{artists} - {t.name}"
+                return title, [td]
+        except Exception:
+            pass
+
+        import json
+        import requests
+        url = f"https://open.spotify.com/embed/track/{track_id}"
+        r = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            timeout=15,
+        )
+        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.DOTALL)
+        if not m:
+            raise ValueError(f"Kon track {track_id} niet ophalen.")
+        data = json.loads(m.group(1))
+        entity = data.get("props", {}).get("pageProps", {}).get("state", {}).get("data", {}).get("entity", {})
+        title = entity.get("name") or entity.get("title") or "Track"
+        artists_list = [a.get("name") for a in entity.get("artists", []) if a.get("name")]
+        artists = ", ".join(artists_list) if artists_list else "Onbekend"
+        cover_art = ""
+        visual = entity.get("visualIdentity", {}).get("image", [])
+        if visual and visual[0].get("url"):
+            cover_art = visual[0]["url"]
+        td = {
+            "id": track_id,
+            "name": title,
+            "artists": artists,
+            "album": "",
+            "album_art": cover_art,
+            "uri": f"spotify:track:{track_id}",
+            "url": f"https://open.spotify.com/track/{track_id}",
+            "duration_ms": entity.get("duration") or 0,
+            "track_number": 1,
+            "release_date": str(entity.get("releaseDate") or ""),
+        }
+        return f"{artists} - {title}", [td]
+
+    def get_playlist_tracks(self, playlist_id: str) -> tuple[str, list[dict]]:
+        """Haal alle tracks van een playlist op (inclusief paginering en automatische fallback)."""
+        if self.sp:
+            try:
+                result = self.sp.playlist(playlist_id)
+                name = result.get("name", "Playlist")
+                tracks_obj = result.get("tracks") or result.get("items")
+                if not tracks_obj:
+                    tracks_obj = self.sp.playlist_items(playlist_id, additional_types=("track",))
+                tracks = self._paginate(
+                    tracks_obj,
+                    lambda item: self._track_dict(
+                        item.get("item") or item.get("track") or item if isinstance(item, dict) else {},
+                        "",
+                    ),
+                )
+                if tracks:
+                    return name, tracks
+            except Exception:
+                # Als Spotify API faalt (bv. 403 Forbidden bij third-party playlists of 404 bij Spotify-curated)
+                pass
+
+        return self._scrape_playlist(playlist_id)
+
+    def get_album_tracks(self, album_id: str) -> tuple[str, list[dict]]:
+        """Haal alle tracks van een album op met fallback."""
+        if self.sp:
+            try:
+                album = self.sp.album(album_id)
+                album_name = album.get("name", "Album")
+                album_images = album.get("images", [])
+                album_art = album_images[0]["url"] if album_images else ""
+                tracks_obj = album.get("tracks") or album.get("items")
+                tracks = self._paginate(
+                    tracks_obj,
+                    lambda item: self._track_dict(
+                        item.get("item") or item.get("track") or item if isinstance(item, dict) else {},
+                        album_name,
+                        album_art,
+                    ),
+                )
+                if tracks:
+                    return album_name, tracks
+            except Exception:
+                pass
+
+        return self._scrape_album(album_id)
+
     def get_track(self, track_id: str) -> tuple[str, list[dict]]:
-        """Haal metadata op voor een enkel nummer."""
-        track = self.sp.track(track_id)
-        td = self._track_dict(track)
-        title = f"{td['artists']} - {td['name']}" if td else "Track"
-        return title, [td] if td else []
+        """Haal metadata op voor een enkel nummer met fallback."""
+        if self.sp:
+            try:
+                track = self.sp.track(track_id)
+                td = self._track_dict(track)
+                if td:
+                    title = f"{td['artists']} - {td['name']}"
+                    return title, [td]
+            except Exception:
+                pass
+
+        return self._scrape_track(track_id)
 
     def get_liked_songs(self) -> tuple[str, list[dict]]:
         """Haal de 'Liked Songs' van de ingelogde gebruiker op."""
