@@ -345,6 +345,71 @@ class SettingsDialog(ctk.CTkToplevel):
 
 
 # ══════════════════════════════════════════════════════════════════
+# Over Spodo / Vibe-Coded Disclaimer Dialoog
+# ══════════════════════════════════════════════════════════════════
+
+class AboutDialog(ctk.CTkToplevel):
+    """Vibe-coded disclaimer & info pop-up."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("✨ Spodo — Vibe-Coded Edition")
+        self.geometry("500x440")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+
+        ctk.CTkLabel(
+            self, text="🎵 Spodo",
+            font=ctk.CTkFont(size=24, weight="bold"), text_color=SPOTIFY_GREEN,
+        ).pack(pady=(22, 2))
+
+        ctk.CTkLabel(
+            self, text="Spotify Playlist & Track Downloader  •  v1.0.0",
+            font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,
+        ).pack(pady=(0, 14))
+
+        card = ctk.CTkFrame(self, fg_color=CARD_BG, corner_radius=12)
+        card.pack(fill="both", expand=True, padx=20, pady=(0, 16))
+
+        badge = ctk.CTkFrame(card, fg_color=("#fce7f3", "#831843"), corner_radius=10)
+        badge.pack(pady=(14, 8))
+        ctk.CTkLabel(
+            badge, text="🧘‍♂️ 100% VIBE-CODED",
+            font=ctk.CTkFont(size=11, weight="bold"), text_color=("#be185d", "#fbcfe8"),
+        ).pack(padx=10, pady=3)
+
+        vibe_msg = (
+            "Dit project is in real-time gebouwd via een organische\n"
+            "AI pair-programming vibe sessie tussen:\n\n"
+            "🧑‍💻 Jente (@jente509) — Bedenker & Vibe Curator\n"
+            "🤖 Gemini (Google DeepMind) — AI Co-Auteur & Code Architect\n\n"
+            "Aangedreven door pure liefde voor muziek, cafeïne en\n"
+            "uitstekende AI-vibes. Geen garanties, puur voor plezier\n"
+            "en eigen gebruik. Geniet van je tracks! 🎧✨"
+            if get_language() == "nl" else
+            "This entire project was crafted in real-time through an\n"
+            "organic AI pair-programming vibe session between:\n\n"
+            "🧑‍💻 Jente (@jente509) — Creator & Vibe Curator\n"
+            "🤖 Gemini (Google DeepMind) — AI Co-Author & Code Architect\n\n"
+            "Fueled by pure music passion, caffeine, and immaculate\n"
+            "AI vibes. No warranties, purely built for fun and personal\n"
+            "use. Enjoy your tunes! 🎧✨"
+        )
+
+        ctk.CTkLabel(
+            card, text=vibe_msg,
+            font=ctk.CTkFont(size=12), justify="center", text_color=TEXT_PRIMARY,
+        ).pack(padx=16, pady=(4, 14))
+
+        ctk.CTkButton(
+            self, text="Keep Vibing ✌️", width=140, height=32,
+            fg_color=SPOTIFY_GREEN, hover_color=SPOTIFY_GREEN_HOVER,
+            command=self.destroy,
+        ).pack(pady=(0, 18))
+
+
+# ══════════════════════════════════════════════════════════════════
 # Playlist-kiezer dialoog
 # ══════════════════════════════════════════════════════════════════
 
@@ -566,10 +631,23 @@ class SpodoApp(ctk.CTk):
         row1 = ctk.CTkFrame(top, fg_color="transparent")
         row1.pack(fill="x", padx=16, pady=(10, 4))
 
+        brand_frame = ctk.CTkFrame(row1, fg_color="transparent")
+        brand_frame.pack(side="left")
+
         ctk.CTkLabel(
-            row1, text="🎵 Spodo",
+            brand_frame, text="🎵 Spodo",
             font=ctk.CTkFont(size=22, weight="bold"), text_color=SPOTIFY_GREEN,
         ).pack(side="left")
+
+        self._vibe_badge = ctk.CTkButton(
+            brand_frame, text="✨ vibe-coded", width=95, height=24,
+            fg_color=("#fce7f3", "#831843"), hover_color=("#fbcfe8", "#9d174d"),
+            text_color=("#be185d", "#fbcfe8"),
+            font=ctk.CTkFont(size=11, weight="bold"),
+            corner_radius=12,
+            command=self._open_about,
+        )
+        self._vibe_badge.pack(side="left", padx=(10, 0))
 
         # Rechter knoppen
         btn_frame = ctk.CTkFrame(row1, fg_color="transparent")
@@ -804,17 +882,25 @@ class SpodoApp(ctk.CTk):
 
         # Scrollable track lijst
         self._track_scroll = ctk.CTkScrollableFrame(
-            self, fg_color=CARD_BG, corner_radius=8,
+            self, fg_color=CARD_BG, corner_radius=10,
         )
         self._track_scroll.pack(fill="both", expand=True, padx=16, pady=(2, 4))
         self._track_scroll.grid_columnconfigure(0, weight=1)
 
-        self._empty_label = ctk.CTkLabel(
-            self._track_scroll,
-            text=t("url_placeholder"),
-            font=ctk.CTkFont(size=13), text_color=TEXT_SECONDARY,
+        empty_box = ctk.CTkFrame(self._track_scroll, fg_color="transparent")
+        empty_box.pack(pady=45)
+        ctk.CTkLabel(empty_box, text="🎧", font=ctk.CTkFont(size=38)).pack()
+        empty_msg = (
+            "Plak een Spotify playlist of album link hierboven\nen klik op 'Ophalen' om te beginnen!"
+            if get_language() == "nl" else
+            "Paste a Spotify playlist or album link above\nand click 'Fetch' to get started!"
         )
-        self._empty_label.pack(pady=40)
+        self._empty_label = ctk.CTkLabel(
+            empty_box,
+            text=empty_msg,
+            font=ctk.CTkFont(size=13), text_color=TEXT_SECONDARY, justify="center",
+        )
+        self._empty_label.pack(pady=(8, 0))
 
     def _build_bottom_bar(self):
         bottom = ctk.CTkFrame(self, fg_color=CARD_BG, corner_radius=0)
@@ -928,6 +1014,9 @@ class SpodoApp(ctk.CTk):
 
     def _open_settings(self):
         SettingsDialog(self, self.cfg, self._on_settings_saved)
+
+    def _open_about(self):
+        AboutDialog(self)
 
     def _on_settings_saved(self, new_cfg: dict):
         self.cfg = new_cfg
