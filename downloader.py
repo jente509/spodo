@@ -38,17 +38,52 @@ _CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 # FFmpeg detectie & installatie
 # ══════════════════════════════════════════════════════════════════
 
+def _inject_ffmpeg_to_path(ffmpeg_bin_dir: Path) -> None:
+    """Voeg ffmpeg-map toe aan os.environ['PATH'] voor het huidige proces en alle subprocessen."""
+    try:
+        dir_str = str(ffmpeg_bin_dir.resolve())
+        current_path = os.environ.get("PATH", "")
+        # Voorkom dubbele toevoegingen
+        paths = current_path.split(os.pathsep)
+        if dir_str not in paths:
+            os.environ["PATH"] = dir_str + os.pathsep + current_path
+
+        # Op Windows: probeer ook persistently toe te voegen aan User PATH via PowerShell/SetEnvironmentVariable
+        if sys.platform == "win32":
+            try:
+                import winreg
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment", 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
+                    try:
+                        user_path, _ = winreg.QueryValueEx(key, "Path")
+                    except FileNotFoundError:
+                        user_path = ""
+                    user_paths = [p for p in user_path.split(";") if p]
+                    if dir_str not in user_paths:
+                        user_paths.append(dir_str)
+                        winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, ";".join(user_paths))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
 def find_ffmpeg() -> Optional[str]:
     """Zoek ffmpeg in PATH of in ~/.spodo/ffmpeg/ (of legacy ~/.spooty/ffmpeg/)."""
+    # 1. Lokale Spodo map eerst controleren en direct aan proces-PATH toevoegen
+    local = FFMPEG_DIR / ("ffmpeg.exe" if sys.platform == "win32" else "ffmpeg")
+    if local.exists():
+        _inject_ffmpeg_to_path(FFMPEG_DIR)
+        return str(local)
+
+    legacy = Path.home() / ".spooty" / "ffmpeg" / ("ffmpeg.exe" if sys.platform == "win32" else "ffmpeg")
+    if legacy.exists():
+        _inject_ffmpeg_to_path(legacy.parent)
+        return str(legacy)
+
     which = shutil.which("ffmpeg")
     if which:
         return which
-    local = FFMPEG_DIR / ("ffmpeg.exe" if sys.platform == "win32" else "ffmpeg")
-    if local.exists():
-        return str(local)
-    legacy = Path.home() / ".spooty" / "ffmpeg" / ("ffmpeg.exe" if sys.platform == "win32" else "ffmpeg")
-    if legacy.exists():
-        return str(legacy)
+
     return None
 
 
@@ -98,8 +133,9 @@ def download_ffmpeg(on_log: Optional[Callable[[str], None]] = None) -> Optional[
 
         ffmpeg_exe = FFMPEG_DIR / "ffmpeg.exe"
         if ffmpeg_exe.exists():
+            _inject_ffmpeg_to_path(FFMPEG_DIR)
             if on_log:
-                on_log(f"✅ FFmpeg geïnstalleerd in {FFMPEG_DIR}")
+                on_log(f"✅ FFmpeg geïnstalleerd en geactiveerd in {FFMPEG_DIR}")
             return str(ffmpeg_exe)
         else:
             if on_log:
