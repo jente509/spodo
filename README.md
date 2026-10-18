@@ -30,7 +30,9 @@
 ---
 
 ### ✨ Key Features
-- **⚡ Fast Spotify Downloading**: Fetch tracks, albums, or entire playlists via public Spotify URLs or your connected personal Spotify account.
+- **⚡ Multi-Threaded Parallel Downloads**: Download multiple tracks concurrently (1 to 4 threads) powered by a thread-safe worker pool. *(Recommended: 2–3 threads for optimal speed without triggering YouTube rate limits).*
+- **📜 Smooth Large Playlist Handling**: Chunked progressive UI rendering ensures instant responsiveness even with massive playlists (500 to 3,000+ tracks).
+- **🎵 Fast Spotify Metadata Fetching**: Fetch tracks, albums, or entire playlists via public Spotify URLs or your connected personal Spotify account with automatic multi-tier web fallback (API, scraper & embed).
 - **🏷️ Studio-Quality ID3 Tagging**: Automatically embeds track title, artists, album title, release year, track number, and high-resolution album artwork into the file.
 - **🎧 Audio Formats & Bitrates**:
   - MP3 (up to 320 kbps)
@@ -45,7 +47,7 @@
 - **🎨 Modern Dark & Light Mode**:
   - Beautiful CustomTkinter interface.
   - Instant toggle (`🌙` / `☀️`) in the top navigation bar.
-- **📦 Zero-Config FFmpeg**: Automatically detects or downloads a standalone FFmpeg on Windows so you never need to configure system PATH variables.
+- **📦 Zero-Config FFmpeg**: Automatically detects, downloads, and injects a standalone FFmpeg into both the active process `PATH` and Windows system environment so downloads work immediately without manual setup.
 - **🌐 Bilingual UI**: Seamless 1-click toggle between **English** and **Nederlands** directly in the header (`🇬🇧 EN` / `🇳🇱 NL`).
 
 ---
@@ -91,6 +93,14 @@ If YouTube prompts you with *"Sign in to confirm you’re not a bot"*:
 2. Under **YouTube Cookies**, select your everyday browser (e.g., *Brave*, *Chrome*, *Edge*, *Firefox*).
 3. Click **🔄 Synchronize from [Browser]**.
 4. Spodo will safely extract your YouTube cookies into an isolated file, preventing database lock errors and ensuring uninterrupted downloads.
+
+---
+
+### ⚡ Parallel Downloads & Speed
+Under **⚙ (Settings) ➜ Audio & Speed**, you can configure the number of concurrent download threads:
+- **1 Thread**: Safest against IP rate-limiting and YouTube bot challenges.
+- **2 to 3 Threads (Recommended)**: The ideal sweet spot. Downloads up to 3× faster while keeping YouTube stream requests reliable.
+- **4 Threads**: Maximum performance. Great for bulk downloads, though aggressive rate-limiting on individual streams may occasionally require a quick re-run.
 
 ---
 
