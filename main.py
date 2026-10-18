@@ -60,7 +60,7 @@ class SettingsDialog(ctk.CTkToplevel):
     def __init__(self, parent, config: dict, on_save):
         super().__init__(parent)
         self.title(t("settings_title"))
-        self.geometry("540x670")
+        self.geometry("580x690")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
@@ -79,50 +79,55 @@ class SettingsDialog(ctk.CTkToplevel):
         ctk.CTkLabel(scroll, text=t("sec_spotify_sub"), font=ctk.CTkFont(size=11), text_color=TEXT_SECONDARY).pack(anchor="w", padx=16, pady=(0, 4))
 
         ctk.CTkLabel(scroll, text=t("client_id"), text_color=TEXT_PRIMARY).pack(anchor="w", **pad)
-        self._id_entry = ctk.CTkEntry(scroll, width=470)
+        self._id_entry = ctk.CTkEntry(scroll, width=510)
         self._id_entry.insert(0, config.get("client_id", ""))
         self._id_entry.pack(padx=16)
 
         ctk.CTkLabel(scroll, text=t("client_secret"), text_color=TEXT_PRIMARY).pack(anchor="w", **pad)
-        self._secret_entry = ctk.CTkEntry(scroll, width=470, show="•")
+        self._secret_entry = ctk.CTkEntry(scroll, width=510, show="•")
         self._secret_entry.insert(0, config.get("client_secret", ""))
         self._secret_entry.pack(padx=16)
 
         ctk.CTkLabel(scroll, text=t("redirect_uri"), text_color=TEXT_PRIMARY).pack(anchor="w", **pad)
-        self._uri_entry = ctk.CTkEntry(scroll, width=470)
+        self._uri_entry = ctk.CTkEntry(scroll, width=510)
         self._uri_entry.insert(0, config.get("redirect_uri", "http://127.0.0.1:3001/api/callback"))
         self._uri_entry.pack(padx=16)
 
-        # --- SECTIE 2: AUDIO FORMAAT ---
+        # --- SECTIE 2: AUDIO FORMAAT & SNELHEID ---
         ctk.CTkLabel(scroll, text=t("sec_audio"), font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT_PRIMARY).pack(anchor="w", padx=16, pady=(16, 4))
 
+        # Rij 1: Formaat + Bitrate
         row_fmt = ctk.CTkFrame(scroll, fg_color="transparent")
-        row_fmt.pack(fill="x", padx=16, pady=(4, 2))
+        row_fmt.pack(fill="x", padx=16, pady=(4, 6))
 
         ctk.CTkLabel(row_fmt, text=t("format_label"), text_color=TEXT_PRIMARY).pack(side="left")
         self._format_var = ctk.StringVar(value=config.get("output_format", "mp3"))
         ctk.CTkOptionMenu(
             row_fmt, variable=self._format_var,
             values=["mp3", "flac", "ogg", "opus", "m4a", "wav"],
-            width=100,
-        ).pack(side="left", padx=(8, 24))
+            width=110,
+        ).pack(side="left", padx=(8, 30))
 
         ctk.CTkLabel(row_fmt, text=t("bitrate_label"), text_color=TEXT_PRIMARY).pack(side="left")
         self._bitrate_var = ctk.StringVar(value=config.get("bitrate", "320k"))
         ctk.CTkOptionMenu(
             row_fmt, variable=self._bitrate_var,
             values=["128k", "192k", "256k", "320k"],
-            width=100,
-        ).pack(side="left", padx=(8, 24))
+            width=110,
+        ).pack(side="left", padx=8)
 
-        ctk.CTkLabel(row_fmt, text=t("concurrent_label"), text_color=TEXT_PRIMARY).pack(side="left")
+        # Rij 2: Parallelle downloads op een eigen regel
+        row_concurrent = ctk.CTkFrame(scroll, fg_color="transparent")
+        row_concurrent.pack(fill="x", padx=16, pady=(2, 2))
+
+        ctk.CTkLabel(row_concurrent, text=t("concurrent_label"), text_color=TEXT_PRIMARY).pack(side="left")
         cur_concurrent = str(config.get("concurrent_downloads", 2))
         self._concurrent_var = ctk.StringVar(value=cur_concurrent)
         ctk.CTkOptionMenu(
-            row_fmt, variable=self._concurrent_var,
+            row_concurrent, variable=self._concurrent_var,
             values=["1", "2", "3", "4"],
-            width=70,
-        ).pack(side="left", padx=8)
+            width=80,
+        ).pack(side="left", padx=(10, 0))
 
         ctk.CTkLabel(
             scroll,
