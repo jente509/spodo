@@ -113,7 +113,22 @@ class SettingsDialog(ctk.CTkToplevel):
             row_fmt, variable=self._bitrate_var,
             values=["128k", "192k", "256k", "320k"],
             width=100,
+        ).pack(side="left", padx=(8, 24))
+
+        ctk.CTkLabel(row_fmt, text=t("concurrent_label"), text_color=TEXT_PRIMARY).pack(side="left")
+        cur_concurrent = str(config.get("concurrent_downloads", 2))
+        self._concurrent_var = ctk.StringVar(value=cur_concurrent)
+        ctk.CTkOptionMenu(
+            row_fmt, variable=self._concurrent_var,
+            values=["1", "2", "3", "4"],
+            width=70,
         ).pack(side="left", padx=8)
+
+        ctk.CTkLabel(
+            scroll,
+            text=t("concurrent_sub"),
+            font=ctk.CTkFont(size=11), text_color=TEXT_SECONDARY,
+        ).pack(anchor="w", padx=16, pady=(0, 6))
 
         # --- SECTIE 3: YOUTUBE COOKIES / BOT BEVEILIGING ---
         ctk.CTkLabel(scroll, text=t("sec_cookies"), font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT_PRIMARY).pack(anchor="w", padx=16, pady=(16, 2))
@@ -321,6 +336,10 @@ class SettingsDialog(ctk.CTkToplevel):
         self._config["redirect_uri"] = self._uri_entry.get().strip()
         self._config["output_format"] = self._format_var.get()
         self._config["bitrate"] = self._bitrate_var.get()
+        try:
+            self._config["concurrent_downloads"] = int(self._concurrent_var.get())
+        except (ValueError, TypeError):
+            self._config["concurrent_downloads"] = 2
         self._config["cookie_source"] = self._cookie_var.get()
         self._config["cookie_file"] = self._cookie_file_entry.get().strip()
 
@@ -1150,12 +1169,30 @@ class SpodoApp(ctk.CTk):
         num_suffix = "nummers" if get_language() == "nl" else "tracks"
         self._track_count_label.configure(text=f"({len(tracks)} {num_suffix})")
 
-        for i, track in enumerate(tracks, start=1):
-            row = TrackRow(self._track_scroll, index=i, track=track)
-            row.pack(fill="x", pady=1)
-            self.track_rows.append(row)
+        # Chunked / batch rendering zodat grote playlists (500 - 3000 nummers)
+        # de gebruikersinterface niet laten bevriezen.
+        chunk_size = 35
 
+        def _render_chunk(start_idx: int):
+            # Controleer of de tracks ondertussen niet vervangen zijn
+            if self.current_tracks is not tracks:
+                return
+
+            end_idx = min(start_idx + chunk_size, len(tracks))
+            for i in range(start_idx, end_idx):
+                trk = tracks[i]
+                row = TrackRow(self._track_scroll, index=i + 1, track=trk)
+                row.pack(fill="x", pady=1)
+                self.track_rows.append(row)
+
+            if end_idx < len(tracks):
+                self.after(5, _render_chunk, end_idx)
+            else:
+                self._download_btn.configure(state="normal")
+
+        # Start de eerste batch direct en schakel downloadknop alvast in
         self._download_btn.configure(state="normal")
+        _render_chunk(0)
 
     # ------------------------------------------------------------------
     # Selectie
@@ -1204,6 +1241,7 @@ class SpodoApp(ctk.CTk):
             bitrate=self.cfg.get("bitrate", "320k"),
             cookie_source=self.cfg.get("cookie_source", "none"),
             cookie_file=self.cfg.get("cookie_file", ""),
+            concurrent_workers=self.cfg.get("concurrent_downloads", 2),
         )
 
         threading.Thread(

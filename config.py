@@ -37,6 +37,7 @@ DEFAULT_CONFIG = {
     "client_secret": "",
     "output_format": "mp3",
     "bitrate": "320k",
+    "concurrent_downloads": 2,
     "redirect_uri": "http://127.0.0.1:3001/api/callback",
     "cookie_source": "none",
     "cookie_file": "",

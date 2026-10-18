@@ -16,6 +16,7 @@ import zipfile
 import io
 from pathlib import Path
 from typing import Callable, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 import yt_dlp
@@ -242,20 +243,34 @@ def _generate_candidate_queries(artists: str, title: str) -> list[str]:
 # ID3 / metadata tagging
 # ══════════════════════════════════════════════════════════════════
 
-def _fetch_album_art(url: str, cache: dict) -> Optional[bytes]:
-    """Download albumcover-bytes (met simpele cache per URL)."""
+def _fetch_album_art(url: str, cache: dict, lock: Optional[threading.Lock] = None) -> Optional[bytes]:
+    """Download albumcover-bytes (met simpele cache per URL en thread-safety)."""
     if not url:
         return None
-    if url in cache:
+    if lock:
+        with lock:
+            if url in cache:
+                return cache[url]
+    elif url in cache:
         return cache[url]
+
     try:
         resp = requests.get(url, timeout=15)
         if resp.status_code == 200:
-            cache[url] = resp.content
+            if lock:
+                with lock:
+                    cache[url] = resp.content
+            else:
+                cache[url] = resp.content
             return resp.content
     except Exception:
         pass
-    cache[url] = None
+
+    if lock:
+        with lock:
+            cache[url] = None
+    else:
+        cache[url] = None
     return None
 
 
@@ -449,15 +464,20 @@ class Downloader:
         bitrate: str = "320k",
         cookie_source: str = "none",
         cookie_file: str = "",
+        concurrent_workers: int = 2,
     ):
         self.music_dir = music_dir
         self.output_format = output_format
         self.bitrate = bitrate
         self.cookie_source = (cookie_source or "none").lower()
         self.cookie_file = cookie_file or ""
+        self.concurrent_workers = max(1, min(int(concurrent_workers or 2), 4))
         self._cancel_event = threading.Event()
         self._ffmpeg_path = find_ffmpeg()
         self._art_cache: dict[str, Optional[bytes]] = {}
+        self._art_lock = threading.Lock()
+        self._log_lock = threading.Lock()
+        self._progress_lock = threading.Lock()
         self._cookie_opts = resolve_cookie_opts(self.cookie_source, self.cookie_file)
 
     def cancel(self) -> None:
@@ -590,7 +610,7 @@ class Downloader:
             return False
 
         # Tagging met Spotify-metadata + albumcover
-        art_data = _fetch_album_art(track.get("album_art", ""), self._art_cache)
+        art_data = _fetch_album_art(track.get("album_art", ""), self._art_cache, lock=self._art_lock)
         _tag_file(final_path, track, self.output_format, art_data)
 
         return True
@@ -643,41 +663,82 @@ class Downloader:
             else:
                 on_log(f"🍪 YouTube cookiebestand actief: {c_path.name}")
 
-        for index, track in enumerate(tracks, start=1):
-            if self._cancel_event.is_set():
-                if on_log:
-                    on_log(t("download_cancelled_log"))
-                break
-
-            display = f"{track.get('artists', '?')} - {track.get('name', '?')}"
+        def log_safe(msg: str):
             if on_log:
-                on_log(f"▶ [{index}/{total}] {display}")
+                with self._log_lock:
+                    on_log(msg)
 
-            success = self._download_single(track, output_dir, on_log)
+        workers = self.concurrent_workers
+        if workers > 1:
+            log_safe(f"⚡ Parallel downloaden actief: {workers} gelijktijdige threads")
 
+        def _worker_task(idx: int, trk: dict) -> bool:
             if self._cancel_event.is_set():
-                break
-
+                return False
+            display = f"{trk.get('artists', '?')} - {trk.get('name', '?')}"
+            log_safe(f"▶ [{idx}/{total}] {display}")
+            success = self._download_single(trk, output_dir, log_safe)
             if success:
-                completed += 1
-                if on_log:
-                    on_log(t("track_complete_log"))
+                log_safe(f"✅ Voltooid [{idx}/{total}]: {display}")
             else:
-                failed += 1
-                if on_log:
-                    on_log(t("track_failed_log"))
+                log_safe(f"⚠️ Mislukt [{idx}/{total}]: {display}")
+            return success
 
-            if on_progress:
-                on_progress(completed, failed, total)
+        if workers <= 1:
+            # Sequentiële modus
+            for index, track in enumerate(tracks, start=1):
+                if self._cancel_event.is_set():
+                    log_safe(t("download_cancelled_log"))
+                    break
+
+                ok = _worker_task(index, track)
+                if self._cancel_event.is_set():
+                    break
+                if ok:
+                    completed += 1
+                else:
+                    failed += 1
+
+                if on_progress:
+                    on_progress(completed, failed, total)
+        else:
+            # Parallelle modus met gecontroleerde ThreadPool (max 2-3 workers)
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                future_map = {
+                    executor.submit(_worker_task, index, track): index
+                    for index, track in enumerate(tracks, start=1)
+                }
+
+                for future in as_completed(future_map):
+                    if self._cancel_event.is_set():
+                        # Cancel resterende taken
+                        for f in future_map:
+                            f.cancel()
+                        break
+
+                    try:
+                        ok = future.result()
+                    except Exception:
+                        ok = False
+
+                    with self._progress_lock:
+                        if ok:
+                            completed += 1
+                        else:
+                            failed += 1
+                        current_c = completed
+                        current_f = failed
+
+                    if on_progress:
+                        on_progress(current_c, current_f, total)
 
         # Eindrapport
-        if on_log:
-            on_log("─" * 50)
-            if self._cancel_event.is_set():
-                on_log(t("download_stopped_log", completed=completed, failed=failed, total=total))
-            else:
-                on_log(t("download_complete_log", completed=completed, failed=failed, total=total))
-            on_log(t("saved_in_log", path=str(output_dir)))
+        log_safe("─" * 50)
+        if self._cancel_event.is_set():
+            log_safe(t("download_stopped_log", completed=completed, failed=failed, total=total))
+        else:
+            log_safe(t("download_complete_log", completed=completed, failed=failed, total=total))
+        log_safe(t("saved_in_log", path=str(output_dir)))
 
         if on_complete:
             on_complete(completed, failed, total)
