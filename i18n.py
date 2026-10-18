@@ -140,6 +140,9 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "saved_in_log": "📁 Opgeslagen in: {path}",
         "select_folder_dialog": "Selecteer downloadmap voor muziek",
         "settings_saved_log": "⚙️ Instellingen opgeslagen.",
+        "empty_hint": "Plak een Spotify playlist-, album- of track-URL hierboven\nen klik op 'Ophalen' om te beginnen!",
+        "ffmpeg_downloading": "⏳ FFmpeg installeren... even geduld, download loopt (~80 MB)",
+        "login_ok": "✅ Ingelogd als {name}",
     },
     "en": {
         # General / App
@@ -273,6 +276,9 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "saved_in_log": "📁 Saved in: {path}",
         "select_folder_dialog": "Select music download folder",
         "settings_saved_log": "⚙️ Settings saved.",
+        "empty_hint": "Paste a Spotify playlist, album, or track URL above\nand click 'Fetch' to get started!",
+        "ffmpeg_downloading": "⏳ Installing FFmpeg... please wait, download in progress (~80 MB)",
+        "login_ok": "✅ Logged in as {name}",
     },
 }
 

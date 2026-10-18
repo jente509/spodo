@@ -65,7 +65,7 @@ def load_config() -> dict:
             with open(CONFIG_FILE, "r", encoding="utf-8") as fh:
                 stored = json.load(fh)
             for key, value in stored.items():
-                if value:  # Overschrijf alleen als de opgeslagen waarde niet leeg is
+                if value is not None:  # Overschrijf alleen als de opgeslagen waarde niet None is (behoudt False/0)
                     cfg[key] = value
         except (json.JSONDecodeError, IOError):
             pass  # Corrupte config → gebruik defaults

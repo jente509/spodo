@@ -400,7 +400,7 @@ class SpotifyClient:
             try:
                 result = self.sp.playlist(playlist_id)
                 name = result.get("name", "Playlist")
-                tracks_obj = result.get("tracks") or result.get("items")
+                tracks_obj = result.get("tracks")
                 if not tracks_obj:
                     tracks_obj = self.sp.playlist_items(playlist_id, additional_types=("track",))
                 tracks = self._paginate(
@@ -460,14 +460,20 @@ class SpotifyClient:
         """Haal de 'Liked Songs' van de ingelogde gebruiker op."""
         if not self.is_logged_in():
             raise PermissionError("Je moet ingelogd zijn om Liked Songs op te halen.")
-        page = self.sp.current_user_saved_tracks(limit=50)
-        tracks = self._paginate(
-            page,
-            lambda item: self._track_dict(
-                item.get("item") or item.get("track") or item if isinstance(item, dict) else {},
-                "",
-            ),
-        )
+        try:
+            page = self.sp.current_user_saved_tracks(limit=50)
+            tracks = self._paginate(
+                page,
+                lambda item: self._track_dict(
+                    item.get("item") or item.get("track") or item if isinstance(item, dict) else {},
+                    "",
+                ),
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Kon Liked Songs niet ophalen via Spotify API: {exc}\n"
+                "Controleer je internetverbinding of log opnieuw in."
+            ) from exc
         return "Liked Songs", tracks
 
     def get_user_playlists(self) -> list[dict]:

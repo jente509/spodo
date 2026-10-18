@@ -17,6 +17,7 @@ from config import load_config, save_config
 from downloader import (
     Downloader,
     ensure_ffmpeg,
+    find_ffmpeg,
     test_youtube_auth,
     sync_browser_cookies,
     get_saved_cookie_count,
@@ -127,7 +128,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(row_cookie, text=t("cookie_source"), text_color=TEXT_PRIMARY).pack(side="left")
         self._cookie_var = ctk.StringVar(value=config.get("cookie_source", "none").lower())
-        browser_choices = ["none", "brave", "chrome", "edge", "firefox", "file"]
+        browser_choices = ["none", "brave", "chrome", "edge", "firefox", "opera", "vivaldi", "file"]
         self._cookie_menu = ctk.CTkOptionMenu(
             row_cookie, variable=self._cookie_var,
             values=browser_choices,
@@ -520,6 +521,7 @@ class SpodoApp(ctk.CTk):
         self.collection_name: str = ""
         self.downloader: Optional[Downloader] = None
         self._downloading = False
+        self._tracks_loaded = False   # True zodra een fetch is uitgevoerd (ook als leeg)
 
         # Thread-safe queue voor UI updates vanuit achtergrondthreads
         self._ui_queue = queue.Queue()
@@ -582,9 +584,17 @@ class SpodoApp(ctk.CTk):
         except Exception:
             pass
 
-        # FFmpeg check
+        # FFmpeg check — als het niet bestaat, blokkeer de download-knop tijdens installatie
         self.ui_call(self._log, t("check_ffmpeg"))
+        ffmpeg_needs_download = not find_ffmpeg()
+        if ffmpeg_needs_download:
+            self.ui_call(self._set_ffmpeg_downloading, True)
+
         ok = ensure_ffmpeg(on_log=lambda msg: self.ui_call(self._log, msg))
+
+        if ffmpeg_needs_download:
+            self.ui_call(self._set_ffmpeg_downloading, False)
+
         if ok:
             self.ui_call(self._log, t("ffmpeg_available"))
         else:
@@ -609,6 +619,23 @@ class SpodoApp(ctk.CTk):
                 self.ui_call(self._log, t("cookies_active_browser", count=count, browser=cookie_src.capitalize()))
             else:
                 self.ui_call(self._log, t("cookies_active_browser_none", browser=cookie_src.capitalize()))
+
+    def _set_ffmpeg_downloading(self, downloading: bool):
+        """Schakel de download-knop in/uit tijdens FFmpeg-installatie."""
+        if downloading:
+            self._download_btn.configure(
+                state="disabled",
+                text=t("ffmpeg_downloading"),
+            )
+            self._log(t("ffmpeg_downloading"))
+        else:
+            # Herstel de knop — alleen inschakelen als er tracks geselecteerd zijn
+            if self.current_tracks:
+                self._download_btn.configure(state="normal", text=t("download_btn"))
+            else:
+                self._download_btn.configure(state="disabled", text=t("download_btn"))
+
+
 
     # ------------------------------------------------------------------
     # UI opbouw
@@ -780,7 +807,13 @@ class SpodoApp(ctk.CTk):
         self._deselect_all_btn.configure(text=t("deselect_all"))
 
         if not self.current_tracks:
-            self._empty_label.configure(text=t("url_placeholder"))
+            if self._tracks_loaded:
+                # Fetch is uitgevoerd maar leverde niks op
+                no_results = "Geen nummers gevonden." if get_language() == "nl" else "No tracks found."
+                self._empty_label.configure(text=no_results)
+            else:
+                # Initiële staat: nog niks opgehaald
+                self._empty_label.configure(text=t("empty_hint"))
         else:
             num_suffix = "nummers" if get_language() == "nl" else "tracks"
             self._track_count_label.configure(text=f"({len(self.current_tracks)} {num_suffix})")
@@ -879,17 +912,12 @@ class SpodoApp(ctk.CTk):
         self._track_scroll.pack(fill="both", expand=True, padx=16, pady=(2, 4))
         self._track_scroll.grid_columnconfigure(0, weight=1)
 
-        empty_box = ctk.CTkFrame(self._track_scroll, fg_color="transparent")
-        empty_box.pack(pady=45)
-        ctk.CTkLabel(empty_box, text="🎧", font=ctk.CTkFont(size=38)).pack()
-        empty_msg = (
-            "Plak een Spotify playlist of album link hierboven\nen klik op 'Ophalen' om te beginnen!"
-            if get_language() == "nl" else
-            "Paste a Spotify playlist or album link above\nand click 'Fetch' to get started!"
-        )
+        self._empty_box = ctk.CTkFrame(self._track_scroll, fg_color="transparent")
+        self._empty_box.pack(pady=45)
+        ctk.CTkLabel(self._empty_box, text="🎧", font=ctk.CTkFont(size=38)).pack()
         self._empty_label = ctk.CTkLabel(
-            empty_box,
-            text=empty_msg,
+            self._empty_box,
+            text=t("empty_hint"),
             font=ctk.CTkFont(size=13), text_color=TEXT_SECONDARY, justify="center",
         )
         self._empty_label.pack(pady=(8, 0))
@@ -957,7 +985,7 @@ class SpodoApp(ctk.CTk):
             self.sp_client.login_oauth()
             self.ui_call(self._refresh_login_ui)
             name = self.sp_client.get_display_name()
-            self.ui_call(self._log, f"✅ Ingelogd als {name}" if get_language() == "nl" else f"✅ Logged in as {name}")
+            self.ui_call(self._log, t("login_ok", name=name))
         except Exception as exc:
             self.ui_call(self._log, f"❌ Login error: {exc}")
             self.ui_call(lambda: self._login_btn.configure(state="normal", text=t("login_spotify")))
@@ -1097,24 +1125,26 @@ class SpodoApp(ctk.CTk):
     def _populate_tracks(self, name: str, tracks: list[dict]):
         self.collection_name = name
         self.current_tracks = tracks
+        self._tracks_loaded = True
 
-        # Leeg de huidige lijst
-        for child in self._track_scroll.winfo_children():
-            child.destroy()
+        # Verwijder alleen TrackRow-widgets (laat _empty_box intact)
+        for row in self.track_rows:
+            row.pack_forget()
+            row.destroy()
         self.track_rows.clear()
 
         if not tracks:
-            msg = "Geen nummers gevonden." if get_language() == "nl" else "No tracks found."
-            self._empty_label = ctk.CTkLabel(
-                self._track_scroll,
-                text=msg,
-                font=ctk.CTkFont(size=13), text_color=TEXT_SECONDARY,
-            )
-            self._empty_label.pack(pady=40)
+            # Toon de lege-staat met "geen nummers gevonden"-tekst
+            no_results = "Geen nummers gevonden." if get_language() == "nl" else "No tracks found."
+            self._empty_label.configure(text=no_results)
+            self._empty_box.pack(pady=45)
             self._download_btn.configure(state="disabled")
             self._collection_label.configure(text="")
             self._track_count_label.configure(text="")
             return
+
+        # Verberg de lege staat
+        self._empty_box.pack_forget()
 
         self._collection_label.configure(text=f"🎶 {name}")
         num_suffix = "nummers" if get_language() == "nl" else "tracks"
