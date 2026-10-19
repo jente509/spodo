@@ -76,10 +76,15 @@ def find_ffmpeg() -> Optional[str]:
         _inject_ffmpeg_to_path(FFMPEG_DIR)
         return str(local)
 
-    legacy = Path.home() / ".spooty" / "ffmpeg" / ("ffmpeg.exe" if sys.platform == "win32" else "ffmpeg")
-    if legacy.exists():
-        _inject_ffmpeg_to_path(legacy.parent)
-        return str(legacy)
+    legacy_candidates = [
+        Path.home() / ".spooty" / "ffmpeg" / ("ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"),
+        (Path(os.getenv("APPDATA")) / "spooty" / "ffmpeg" / "ffmpeg.exe") if os.getenv("APPDATA") else None,
+        (Path.home() / ".spodo" / "ffmpeg" / "ffmpeg.exe") if CONFIG_DIR != (Path.home() / ".spodo") else None,
+    ]
+    for leg in legacy_candidates:
+        if leg and leg.exists():
+            _inject_ffmpeg_to_path(leg.parent)
+            return str(leg)
 
     which = shutil.which("ffmpeg")
     if which:
@@ -398,11 +403,11 @@ def sync_browser_cookies(browser_name: str) -> tuple[bool, str, int]:
     except Exception as exc:
         err = _clean_ansi(str(exc))
         existing = get_saved_cookie_count(target_path)
-        if "Could not copy" in err or "Permission denied" in err or "13" in err:
+        if "Could not copy" in err or "Permission denied" in err or "13" in err or "DPAPI" in err or "Failed to decrypt" in err:
             if existing > 0:
-                msg = f"{b_name.capitalize()} staat open. Bestaande {existing} cookies blijven actief!"
+                msg = f"{b_name.capitalize()} staat open of is vergrendeld. Bestaande {existing} cookies blijven actief!"
                 return True, msg, existing
-            msg = f"{b_name.capitalize()} staat open en vergrendelt cookies. Sluit de browser even af om te synchroniseren."
+            msg = f"{b_name.capitalize()} cookies zijn vergrendeld door Windows/browser (DPAPI). Sluit {b_name.capitalize()} even af of importeer een cookies.txt."
         else:
             msg = f"Kon cookies niet ophalen uit {b_name.capitalize()}: {err[:80]}"
         return False, msg, existing
@@ -440,8 +445,9 @@ def resolve_cookie_opts(cookie_source: str = "none", cookie_file: str = "") -> d
         except Exception:
             pass
 
-        # Als extraheren mislukt (bijv. browser open) en er was nog geen bestand:
-        return {"cookiesfrombrowser": (source,)}
+        # Als extraheren mislukt (bijv. DPAPI fout onder Windows bij Chromium of browser open):
+        # Val NIET terug op 'cookiesfrombrowser', want dat leidt tot fatale DPAPI fouten op elk nummer.
+        return {}
 
     # 3. Geen browser gekozen ('none'), maar standaard cookiebestand is wel aanwezig
     if default_cookies.exists() and default_cookies.stat().st_size > 0:
@@ -586,6 +592,24 @@ class Downloader:
             except Exception as exc:
                 last_error = exc
                 err_text = str(exc)
+
+                # Als cookies mislukken (bijv. DPAPI fout of browser lock), probeer direct ZONDER cookies
+                if ("DPAPI" in err_text or "Failed to decrypt" in err_text or "Could not copy" in err_text) and ("cookiefile" in ydl_opts or "cookiesfrombrowser" in ydl_opts):
+                    if not cookie_warned and on_log:
+                        on_log(f"   ⚠️ Browser-cookies mislukt (DPAPI/vergrendeld). Schakelt over naar directe download...")
+                        cookie_warned = True
+                    # Verwijder cookie-opties voor deze en volgende pogingen
+                    ydl_opts = {k: v for k, v in ydl_opts.items() if k not in ("cookiefile", "cookiesfrombrowser")}
+                    try:
+                        with yt_dlp.YoutubeDL(ydl_opts) as clean_ydl:
+                            clean_ydl.download([query])
+                        if final_path.exists():
+                            downloaded = True
+                            break
+                    except Exception as retry_exc:
+                        last_error = retry_exc
+                        continue
+
                 if not cookie_warned and on_log and ("Could not copy" in err_text or "Permission denied" in err_text) and "cookie" in err_text.lower():
                     on_log(f"   ⚠️ {self.cookie_source.capitalize()} staat momenteel open en vergrendelt cookies.")
                     on_log("      Sluit je browser even af, of importeer een cookies.txt bestand via Instellingen.")
@@ -776,6 +800,8 @@ def test_youtube_auth(cookie_source: str = "none", cookie_file: str = "") -> tup
         err = _clean_ansi(str(exc))
         if "Could not copy" in err or "Permission denied" in err:
             return False, f"{cookie_source.capitalize()} staat momenteel open. Sluit de browser even af of gebruik een cookies.txt bestand."
+        if "DPAPI" in err or "Failed to decrypt" in err:
+            return False, f"{cookie_source.capitalize()} cookies zijn vergrendeld door browser (DPAPI). Sluit {cookie_source.capitalize()} af of importeer cookies.txt."
         if "Sign in to confirm you’re not a bot" in err:
             return False, "YouTube vraagt om authenticatie. Gebruik cookies.txt of log in via browser."
         return False, err[:120]

@@ -10,6 +10,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog
 from typing import Optional
+import webbrowser
 
 import customtkinter as ctk
 
@@ -76,16 +77,29 @@ class SettingsDialog(ctk.CTkToplevel):
 
         # --- SECTIE 1: SPOTIFY ---
         ctk.CTkLabel(scroll, text=t("sec_spotify"), font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT_PRIMARY).pack(anchor="w", padx=16, pady=(6, 2))
-        ctk.CTkLabel(scroll, text=t("sec_spotify_sub"), font=ctk.CTkFont(size=11), text_color=TEXT_SECONDARY).pack(anchor="w", padx=16, pady=(0, 4))
+
+        row_sp_sub = ctk.CTkFrame(scroll, fg_color="transparent")
+        row_sp_sub.pack(fill="x", padx=16, pady=(0, 4))
+        ctk.CTkLabel(row_sp_sub, text=t("sec_spotify_sub"), font=ctk.CTkFont(size=11), text_color=TEXT_SECONDARY).pack(side="left")
+        ctk.CTkButton(
+            row_sp_sub, text="🌐 Dashboard", width=105, height=24,
+            font=ctk.CTkFont(size=11),
+            fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY,
+            command=lambda: webbrowser.open("https://developer.spotify.com/dashboard"),
+        ).pack(side="right")
 
         ctk.CTkLabel(scroll, text=t("client_id"), text_color=TEXT_PRIMARY).pack(anchor="w", **pad)
-        self._id_entry = ctk.CTkEntry(scroll, width=510)
-        self._id_entry.insert(0, config.get("client_id", ""))
+        self._id_entry = ctk.CTkEntry(scroll, width=510, placeholder_text="Plak je Client ID (bijv. 4a8b7c9e0123456789abcdef01234567)")
+        cur_id = config.get("client_id", "")
+        if cur_id not in ("your_client_id_here", "jouw_client_id_hier"):
+            self._id_entry.insert(0, cur_id)
         self._id_entry.pack(padx=16)
 
         ctk.CTkLabel(scroll, text=t("client_secret"), text_color=TEXT_PRIMARY).pack(anchor="w", **pad)
-        self._secret_entry = ctk.CTkEntry(scroll, width=510, show="•")
-        self._secret_entry.insert(0, config.get("client_secret", ""))
+        self._secret_entry = ctk.CTkEntry(scroll, width=510, show="•", placeholder_text="Plak je Client Secret")
+        cur_secret = config.get("client_secret", "")
+        if cur_secret not in ("your_client_secret_here", "jouw_client_secret_hier"):
+            self._secret_entry.insert(0, cur_secret)
         self._secret_entry.pack(padx=16)
 
         ctk.CTkLabel(scroll, text=t("redirect_uri"), text_color=TEXT_PRIMARY).pack(anchor="w", **pad)
@@ -423,6 +437,108 @@ class AboutDialog(ctk.CTkToplevel):
             fg_color=SPOTIFY_GREEN, hover_color=SPOTIFY_GREEN_HOVER,
             command=self.destroy,
         ).pack(pady=(0, 18))
+
+
+# ══════════════════════════════════════════════════════════════════
+# Spotify Inloghulp Dialoog
+# ══════════════════════════════════════════════════════════════════
+
+class SpotifyLoginHelpDialog(ctk.CTkToplevel):
+    """Pop-up wanneer de gebruiker wil inloggen maar nog geen Client ID / Secret heeft ingesteld."""
+
+    def __init__(self, parent, on_open_settings):
+        super().__init__(parent)
+        is_nl = get_language() == "nl"
+        self.title("Spotify Inloggen Hulp" if is_nl else "Spotify Login Help")
+        self.geometry("540x490")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+
+        ctk.CTkLabel(
+            self, text="🔑 Spotify Inloggen" if is_nl else "🔑 Spotify Login",
+            font=ctk.CTkFont(size=20, weight="bold"), text_color=SPOTIFY_GREEN,
+        ).pack(pady=(18, 4))
+
+        card = ctk.CTkFrame(self, fg_color=CARD_BG, corner_radius=12)
+        card.pack(fill="both", expand=True, padx=20, pady=(6, 16))
+
+        if is_nl:
+            tip_header = "💡 Tip: Inloggen is meestal NIET nodig!"
+            tip_body = (
+                "Voor openbare afspeellijsten, albums en tracks hoef je niet in te loggen.\n"
+                "Plak simpelweg een Spotify URL in de zoekbalk op het hoofdscherm!\n"
+            )
+            req_header = "Wanneer wél inloggen?"
+            req_body = (
+                "Alleen als je je eigen privé-afspeellijsten of 'Liked Songs' wilt ophalen.\n\n"
+                "Stappen om in te loggen:\n"
+                "1. Ga naar developer.spotify.com/dashboard en log in.\n"
+                "2. Maak een gratis app aan en voeg deze Redirect URI toe:\n"
+                "   http://127.0.0.1:3001/api/callback\n"
+                "3. Kopieer je Client ID & Client Secret naar Spodo Instellingen (⚙)."
+            )
+        else:
+            tip_header = "💡 Tip: Login is usually NOT required!"
+            tip_body = (
+                "For public playlists, albums, and tracks, no login is needed.\n"
+                "Simply paste any Spotify URL directly into the search bar!\n"
+            )
+            req_header = "When do you need to log in?"
+            req_body = (
+                "Only to access your personal private playlists or 'Liked Songs'.\n\n"
+                "Steps to log in:\n"
+                "1. Visit developer.spotify.com/dashboard and log in.\n"
+                "2. Create a free app and add this Redirect URI:\n"
+                "   http://127.0.0.1:3001/api/callback\n"
+                "3. Copy your Client ID & Client Secret into Spodo Settings (⚙)."
+            )
+
+        ctk.CTkLabel(
+            card, text=tip_header,
+            font=ctk.CTkFont(size=13, weight="bold"), text_color=SPOTIFY_GREEN, anchor="w",
+        ).pack(fill="x", padx=16, pady=(14, 2))
+
+        ctk.CTkLabel(
+            card, text=tip_body,
+            font=ctk.CTkFont(size=12), text_color=TEXT_PRIMARY, justify="left", anchor="w",
+        ).pack(fill="x", padx=16, pady=(0, 10))
+
+        ctk.CTkLabel(
+            card, text=req_header,
+            font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT_PRIMARY, anchor="w",
+        ).pack(fill="x", padx=16, pady=(4, 2))
+
+        ctk.CTkLabel(
+            card, text=req_body,
+            font=ctk.CTkFont(size=11), text_color=TEXT_SECONDARY, justify="left", anchor="w",
+        ).pack(fill="x", padx=16, pady=(0, 14))
+
+        btn_row = ctk.CTkFrame(self, fg_color="transparent")
+        btn_row.pack(fill="x", padx=20, pady=(0, 16))
+
+        ctk.CTkButton(
+            btn_row, text="🌐 Dashboard", width=130, height=32,
+            fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY,
+            command=lambda: webbrowser.open("https://developer.spotify.com/dashboard"),
+        ).pack(side="left", padx=(0, 8))
+
+        def open_settings_and_close():
+            self.destroy()
+            on_open_settings()
+
+        ctk.CTkButton(
+            btn_row, text="⚙ Open Instellingen" if is_nl else "⚙ Open Settings",
+            width=160, height=32,
+            fg_color=SPOTIFY_GREEN, hover_color=SPOTIFY_GREEN_HOVER,
+            command=open_settings_and_close,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            btn_row, text=t("close"), width=90, height=32,
+            fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY,
+            command=self.destroy,
+        ).pack(side="right")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1000,6 +1116,12 @@ class SpodoApp(ctk.CTk):
     # ------------------------------------------------------------------
 
     def _login_spotify(self):
+        cid = (self.cfg.get("client_id") or "").strip()
+        csecret = (self.cfg.get("client_secret") or "").strip()
+        if not cid or cid in ("your_client_id_here", "jouw_client_id_hier") or not csecret or csecret in ("your_client_secret_here", "jouw_client_secret_hier"):
+            SpotifyLoginHelpDialog(self, on_open_settings=self._open_settings)
+            return
+
         self._login_btn.configure(state="disabled", text=t("fetching"))
         self._log("🔑 Spotify OAuth...")
         threading.Thread(target=self._login_worker, daemon=True).start()

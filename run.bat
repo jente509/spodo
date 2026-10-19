@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 title Spodo - Spotify Playlist Downloader
 echo ============================================
 echo   Spodo - Spotify Playlist Downloader
