@@ -9,13 +9,13 @@ echo ""
 
 # Check Python
 if ! command -v python3 &> /dev/null; then
-    echo "[FOUT] Python3 is niet gevonden. Installeer Python 3.10+."
+    echo "[ERROR] Python3 not found. Please install Python 3.10+."
     exit 1
 fi
 
 # Create venv if not exists
 if [ ! -d "venv" ]; then
-    echo "[*] Virtuele omgeving aanmaken..."
+    echo "[*] Creating virtual environment..."
     python3 -m venv venv
 fi
 
@@ -23,15 +23,15 @@ fi
 source venv/bin/activate
 
 # Install deps
-echo "[*] Dependencies installeren/updaten..."
+echo "[*] Installing/updating dependencies..."
 pip install -r requirements.txt --quiet --disable-pip-version-check
 
 # Copy .env.example if .env doesn't exist
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then
-    echo "[*] .env.example gekopieerd naar .env - vul je Spotify credentials in."
+    echo "[*] Copied .env.example to .env."
     cp .env.example .env
 fi
 
-echo "[*] Spodo starten..."
+echo "[*] Starting Spodo..."
 echo ""
 python3 main.py

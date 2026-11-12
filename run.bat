@@ -9,17 +9,17 @@ echo.
 :: Check Python installation
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [FOUT] Python is niet gevonden. Installeer Python 3.10+ van https://python.org
+    echo [ERROR] Python not found. Please install Python 3.10+ from https://python.org
     pause
     exit /b 1
 )
 
 :: Create virtual environment if not exists
 if not exist "venv" (
-    echo [*] Virtuele omgeving aanmaken...
+    echo [*] Creating virtual environment...
     python -m venv venv
     if errorlevel 1 (
-        echo [FOUT] Kon virtuele omgeving niet aanmaken.
+        echo [ERROR] Could not create virtual environment.
         pause
         exit /b 1
     )
@@ -29,10 +29,10 @@ if not exist "venv" (
 call venv\Scripts\activate.bat
 
 :: Install/upgrade dependencies
-echo [*] Dependencies installeren/updaten...
+echo [*] Installing/updating dependencies...
 pip install -r requirements.txt --quiet --disable-pip-version-check
 if errorlevel 1 (
-    echo [FOUT] Kon dependencies niet installeren.
+    echo [ERROR] Failed to install dependencies.
     pause
     exit /b 1
 )
@@ -40,18 +40,18 @@ if errorlevel 1 (
 :: Copy .env.example to .env if .env doesn't exist
 if not exist ".env" (
     if exist ".env.example" (
-        echo [*] .env.example gekopieerd naar .env - vul je Spotify credentials in.
+        echo [*] Copied .env.example to .env.
         copy .env.example .env >nul
     )
 )
 
-echo [*] Spodo starten...
+echo [*] Starting Spodo...
 echo.
 python main.py
 
 :: Keep window open on error
 if errorlevel 1 (
     echo.
-    echo [FOUT] Spodo is onverwacht gestopt.
+    echo [ERROR] Spodo stopped unexpectedly.
     pause
 )

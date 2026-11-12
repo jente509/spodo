@@ -97,15 +97,15 @@ def download_ffmpeg(on_log: Optional[Callable[[str], None]] = None) -> Optional[
     """Download een statische ffmpeg-build naar ~/.spodo/ffmpeg/ (alleen Windows)."""
     if sys.platform != "win32":
         if on_log:
-            on_log("⚠️ Automatische ffmpeg-download is alleen beschikbaar op Windows.")
-            on_log("   Installeer ffmpeg handmatig: https://ffmpeg.org/download.html")
+            on_log("⚠️ Automatic FFmpeg download is only available on Windows.")
+            on_log("   Please install FFmpeg manually: https://ffmpeg.org/download.html")
         return None
 
     FFMPEG_DIR.mkdir(parents=True, exist_ok=True)
     url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 
     if on_log:
-        on_log("⏳ FFmpeg downloaden (~80 MB)... dit kan even duren.")
+        on_log("⏳ Downloading FFmpeg (~80 MB)... this may take a moment.")
 
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Spodo/1.0"})
@@ -127,7 +127,7 @@ def download_ffmpeg(on_log: Optional[Callable[[str], None]] = None) -> Optional[
                         last_pct = pct
 
         if on_log:
-            on_log("📦 FFmpeg uitpakken...")
+            on_log("📦 Extracting FFmpeg...")
 
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             for member in zf.namelist():
@@ -141,16 +141,16 @@ def download_ffmpeg(on_log: Optional[Callable[[str], None]] = None) -> Optional[
         if ffmpeg_exe.exists():
             _inject_ffmpeg_to_path(FFMPEG_DIR)
             if on_log:
-                on_log(f"✅ FFmpeg geïnstalleerd en geactiveerd in {FFMPEG_DIR}")
+                on_log(f"✅ FFmpeg installed and activated in {FFMPEG_DIR}")
             return str(ffmpeg_exe)
         else:
             if on_log:
-                on_log("❌ FFmpeg uitpakken mislukt — bestanden niet gevonden in zip.")
+                on_log("❌ FFmpeg extraction failed — binaries not found in archive.")
             return None
 
     except Exception as exc:
         if on_log:
-            on_log(f"❌ FFmpeg download mislukt: {exc}")
+            on_log(f"❌ FFmpeg download failed: {exc}")
         return None
 
 
@@ -159,7 +159,7 @@ def ensure_ffmpeg(on_log: Optional[Callable[[str], None]] = None) -> Optional[st
     path = find_ffmpeg()
     if path:
         if on_log:
-            on_log(f"✅ FFmpeg gevonden: {path}")
+            on_log(f"✅ FFmpeg found: {path}")
         return path
     return download_ffmpeg(on_log)
 
@@ -397,7 +397,7 @@ def sync_browser_cookies(browser_name: str) -> tuple[bool, str, int]:
     """
     b_name = (browser_name or "").strip().lower()
     if b_name in ("", "none", "file"):
-        return False, "Geen browser geselecteerd.", 0
+        return False, "No browser selected.", 0
 
     target_path = CONFIG_DIR / "youtube_cookies.txt"
     try:
@@ -407,18 +407,18 @@ def sync_browser_cookies(browser_name: str) -> tuple[bool, str, int]:
             target_path.parent.mkdir(parents=True, exist_ok=True)
             jar.save(str(target_path), ignore_discard=True, ignore_expires=True)
             count = get_saved_cookie_count(target_path)
-            return True, f"{count} cookies succesvol opgeslagen uit {b_name.capitalize()}.", count
-        return False, f"Geen cookies gevonden in {b_name.capitalize()}.", 0
+            return True, f"Successfully saved {count} cookies from {b_name.capitalize()}.", count
+        return False, f"No cookies found in {b_name.capitalize()}.", 0
     except Exception as exc:
         err = _clean_ansi(str(exc))
         existing = get_saved_cookie_count(target_path)
         if "Could not copy" in err or "Permission denied" in err or "13" in err or "DPAPI" in err or "Failed to decrypt" in err:
             if existing > 0:
-                msg = f"{b_name.capitalize()} staat open of is vergrendeld. Bestaande {existing} cookies blijven actief!"
+                msg = f"{b_name.capitalize()} is open or locked. Keeping {existing} existing cookies active!"
                 return True, msg, existing
-            msg = f"{b_name.capitalize()} cookies zijn vergrendeld door Windows/browser (DPAPI). Sluit {b_name.capitalize()} even af of importeer een cookies.txt."
+            msg = f"{b_name.capitalize()} cookies are locked by Windows/browser (DPAPI). Use 'none' or import a cookies.txt file."
         else:
-            msg = f"Kon cookies niet ophalen uit {b_name.capitalize()}: {err[:80]}"
+            msg = f"Could not extract cookies from {b_name.capitalize()}: {err[:80]}"
         return False, msg, existing
 
 
@@ -490,6 +490,8 @@ class Downloader:
         self._log_lock = threading.Lock()
         self._progress_lock = threading.Lock()
         self._cookie_opts = resolve_cookie_opts(self.cookie_source, self.cookie_file)
+        self.failed_tracks: list[dict] = []
+        self.last_output_dir: Optional[Path] = None
 
     def cancel(self) -> None:
         """Annuleer de lopende download."""
@@ -601,7 +603,7 @@ class Downloader:
                 # Als cookies mislukken (bijv. DPAPI fout of browser lock), probeer direct ZONDER cookies
                 if ("DPAPI" in err_text or "Failed to decrypt" in err_text or "Could not copy" in err_text) and ("cookiefile" in ydl_opts or "cookiesfrombrowser" in ydl_opts):
                     if not cookie_warned and on_log:
-                        on_log(f"   ⚠️ Browser-cookies mislukt (DPAPI/vergrendeld). Schakelt over naar directe download...")
+                        on_log("   ⚠️ Browser cookies failed (DPAPI/locked). Falling back to direct download...")
                         cookie_warned = True
                     # Verwijder cookie-opties voor deze en volgende pogingen
                     ydl_opts = {k: v for k, v in ydl_opts.items() if k not in ("cookiefile", "cookiesfrombrowser")}
@@ -616,8 +618,8 @@ class Downloader:
                         continue
 
                 if not cookie_warned and on_log and ("Could not copy" in err_text or "Permission denied" in err_text) and "cookie" in err_text.lower():
-                    on_log(f"   ⚠️ {self.cookie_source.capitalize()} staat momenteel open en vergrendelt cookies.")
-                    on_log("      Sluit je browser even af, of importeer een cookies.txt bestand via Instellingen.")
+                    on_log(f"   ⚠️ {self.cookie_source.capitalize()} is currently open and locking cookies.")
+                    on_log("      Close your browser briefly or import a cookies.txt file in Settings.")
                     cookie_warned = True
                 continue
 
@@ -633,9 +635,9 @@ class Downloader:
             if on_log:
                 if last_error:
                     clean_err = _clean_ansi(str(last_error)).strip()
-                    on_log(f"   ❌ Fout: {clean_err}")
+                    on_log(f"   ❌ Error: {clean_err}")
                 else:
-                    on_log(f"   ⚠️ Nummer niet gevonden op YouTube / YouTube Music")
+                    on_log("   ⚠️ Track not found on YouTube / YouTube Music")
             return False
 
         # Tagging met Spotify-metadata + albumcover
@@ -669,6 +671,7 @@ class Downloader:
         """
         self._cancel_event.clear()
         self._art_cache.clear()
+        self.failed_tracks = []
 
         if not self._ffmpeg_path:
             self._ffmpeg_path = find_ffmpeg()
@@ -682,15 +685,16 @@ class Downloader:
         safe_folder = _sanitize_filename(collection_name) or "Downloads"
         output_dir = Path(self.music_dir) / safe_folder
         output_dir.mkdir(parents=True, exist_ok=True)
+        self.last_output_dir = output_dir
 
         self._cookie_opts = resolve_cookie_opts(self.cookie_source, self.cookie_file)
         if "cookiefile" in self._cookie_opts and on_log:
             c_path = Path(self._cookie_opts["cookiefile"])
             count = get_saved_cookie_count(c_path)
             if count > 0:
-                on_log(f"🍪 YouTube cookies actief: {count} cookies ({c_path.name})")
+                on_log(f"🍪 YouTube cookies active: {count} cookies ({c_path.name})")
             else:
-                on_log(f"🍪 YouTube cookiebestand actief: {c_path.name}")
+                on_log(f"🍪 YouTube cookie file active: {c_path.name}")
 
         def log_safe(msg: str):
             if on_log:
@@ -699,7 +703,7 @@ class Downloader:
 
         workers = self.concurrent_workers
         if workers > 1:
-            log_safe(f"⚡ Parallel downloaden actief: {workers} gelijktijdige threads")
+            log_safe(f"⚡ Parallel downloads active: {workers} concurrent threads")
 
         def _worker_task(idx: int, trk: dict) -> bool:
             if self._cancel_event.is_set():
@@ -708,9 +712,9 @@ class Downloader:
             log_safe(f"▶ [{idx}/{total}] {display}")
             success = self._download_single(trk, output_dir, log_safe)
             if success:
-                log_safe(f"✅ Voltooid [{idx}/{total}]: {display}")
+                log_safe(f"✅ Completed [{idx}/{total}]: {display}")
             else:
-                log_safe(f"⚠️ Mislukt [{idx}/{total}]: {display}")
+                log_safe(f"⚠️ Failed [{idx}/{total}]: {display}")
             return success
 
         if workers <= 1:
@@ -727,6 +731,7 @@ class Downloader:
                     completed += 1
                 else:
                     failed += 1
+                    self.failed_tracks.append(track)
 
                 if on_progress:
                     on_progress(completed, failed, total)
@@ -734,7 +739,7 @@ class Downloader:
             # Parallelle modus met gecontroleerde ThreadPool (max 2-3 workers)
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 future_map = {
-                    executor.submit(_worker_task, index, track): index
+                    executor.submit(_worker_task, index, track): track
                     for index, track in enumerate(tracks, start=1)
                 }
 
@@ -750,11 +755,13 @@ class Downloader:
                     except Exception:
                         ok = False
 
+                    trk_ref = future_map[future]
                     with self._progress_lock:
                         if ok:
                             completed += 1
                         else:
                             failed += 1
+                            self.failed_tracks.append(trk_ref)
                         current_c = completed
                         current_f = failed
 
@@ -779,7 +786,7 @@ def test_youtube_auth(cookie_source: str = "none", cookie_file: str = "") -> tup
 
     if cookie_source == "file":
         if not cookie_file or not Path(cookie_file).exists():
-            return False, "Gekozen cookies.txt bestand bestaat niet."
+            return False, "Selected cookies.txt file does not exist."
     elif cookie_source in ("brave", "chrome", "edge", "firefox", "opera", "safari", "vivaldi"):
         default_cookies = CONFIG_DIR / "youtube_cookies.txt"
         if not (default_cookies.exists() and default_cookies.stat().st_size > 0):
@@ -807,17 +814,17 @@ def test_youtube_auth(cookie_source: str = "none", cookie_file: str = "") -> tup
                 cookie_desc = ""
                 if "cookiefile" in cookie_opts:
                     c_count = get_saved_cookie_count(Path(cookie_opts["cookiefile"]))
-                    cookie_desc = f" ({c_count} cookies actief)" if c_count else " (bestand actief)"
+                    cookie_desc = f" ({c_count} cookies active)" if c_count else " (file active)"
                 elif "cookiesfrombrowser" in cookie_opts:
-                    cookie_desc = f" ({cookie_source.capitalize()} actief)"
-                return True, f"Verbinding geslaagd!{cookie_desc}"
-            return False, "Geen metadata ontvangen."
+                    cookie_desc = f" ({cookie_source.capitalize()} active)"
+                return True, f"Connection succeeded!{cookie_desc}"
+            return False, "No metadata received."
     except Exception as exc:
         err = _clean_ansi(str(exc))
         if "Could not copy" in err or "Permission denied" in err:
-            return False, f"{cookie_source.capitalize()} staat momenteel open. Sluit de browser even af of gebruik een cookies.txt bestand."
+            return False, f"{cookie_source.capitalize()} is currently open. Close your browser or use a cookies.txt file."
         if "DPAPI" in err or "Failed to decrypt" in err:
-            return False, f"{cookie_source.capitalize()} cookies zijn vergrendeld door browser (DPAPI). Sluit {cookie_source.capitalize()} af of importeer cookies.txt."
+            return False, f"{cookie_source.capitalize()} cookies are locked by browser (DPAPI). Use 'none' or import cookies.txt."
         if "Sign in to confirm you’re not a bot" in err:
-            return False, "YouTube vraagt om authenticatie. Gebruik cookies.txt of log in via browser."
+            return False, "YouTube requires authentication. Use cookies.txt or sign in via browser."
         return False, err[:120]

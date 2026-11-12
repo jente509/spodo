@@ -4,8 +4,12 @@ Hoofd-GUI gebouwd met CustomTkinter (dark mode).
 Alle blokkerende taken draaien in daemon threads; UI-updates via app.after().
 """
 
+import os
+from pathlib import Path
 import queue
 import re
+import subprocess
+import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog
@@ -89,14 +93,14 @@ class SettingsDialog(ctk.CTkToplevel):
         ).pack(side="right")
 
         ctk.CTkLabel(scroll, text=t("client_id"), text_color=TEXT_PRIMARY).pack(anchor="w", **pad)
-        self._id_entry = ctk.CTkEntry(scroll, width=510, placeholder_text="Plak je Client ID (bijv. 4a8b7c9e0123456789abcdef01234567)")
+        self._id_entry = ctk.CTkEntry(scroll, width=510, placeholder_text="Paste your Client ID (e.g. 4a8b7c9e0123456789abcdef01234567)")
         cur_id = config.get("client_id", "")
         if cur_id not in ("your_client_id_here", "jouw_client_id_hier"):
             self._id_entry.insert(0, cur_id)
         self._id_entry.pack(padx=16)
 
         ctk.CTkLabel(scroll, text=t("client_secret"), text_color=TEXT_PRIMARY).pack(anchor="w", **pad)
-        self._secret_entry = ctk.CTkEntry(scroll, width=510, show="•", placeholder_text="Plak je Client Secret")
+        self._secret_entry = ctk.CTkEntry(scroll, width=510, show="•", placeholder_text="Paste your Client Secret")
         cur_secret = config.get("client_secret", "")
         if cur_secret not in ("your_client_secret_here", "jouw_client_secret_hier"):
             self._secret_entry.insert(0, cur_secret)
@@ -223,21 +227,11 @@ class SettingsDialog(ctk.CTkToplevel):
 
         self._update_cookie_view()
 
-        # --- SECTIE 4: WEERGAVE & TAAL ---
+        # --- SECTIE 4: WEERGAVE ---
         ctk.CTkLabel(scroll, text=t("sec_ui"), font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT_PRIMARY).pack(anchor="w", padx=16, pady=(16, 4))
 
         row_ui = ctk.CTkFrame(scroll, fg_color="transparent")
         row_ui.pack(fill="x", padx=16, pady=(4, 2))
-
-        ctk.CTkLabel(row_ui, text=t("language_label"), text_color=TEXT_PRIMARY).pack(side="left")
-        current_lang = config.get("language", "nl")
-        self._lang_var = ctk.StringVar(value="Nederlands" if current_lang == "nl" else "English")
-        self._lang_menu = ctk.CTkOptionMenu(
-            row_ui, variable=self._lang_var,
-            values=["Nederlands", "English"],
-            width=130,
-        )
-        self._lang_menu.pack(side="left", padx=(8, 24))
 
         ctk.CTkLabel(row_ui, text=t("theme_label"), text_color=TEXT_PRIMARY).pack(side="left")
         current_mode = config.get("appearance_mode", "dark").lower()
@@ -308,7 +302,7 @@ class SettingsDialog(ctk.CTkToplevel):
     def _browse_cookie_file(self):
         filename = filedialog.askopenfilename(
             title=t("select_cookies_file"),
-            filetypes=[("Text files / Tekstbestanden", "*.txt"), ("All files / Alle bestanden", "*.*")],
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
         )
         if filename:
             self._cookie_file_entry.delete(0, "end")
@@ -369,17 +363,14 @@ class SettingsDialog(ctk.CTkToplevel):
             self._config["concurrent_downloads"] = 2
         self._config["cookie_source"] = self._cookie_var.get()
         self._config["cookie_file"] = self._cookie_file_entry.get().strip()
+        self._config["language"] = "en"
+        set_language("en")
 
-        # Taal
-        chosen_lang = "nl" if "Nederlands" in self._lang_var.get() else "en"
-        self._config["language"] = chosen_lang
-        set_language(chosen_lang)
-
-        # Thema
+        # Theme
         chosen_theme_str = self._theme_var.get()
-        if "Licht" in chosen_theme_str or "Light" in chosen_theme_str:
+        if "Light" in chosen_theme_str:
             new_mode = "light"
-        elif "Systeem" in chosen_theme_str or "System" in chosen_theme_str:
+        elif "System" in chosen_theme_str:
             new_mode = "system"
         else:
             new_mode = "dark"
@@ -420,13 +411,6 @@ class AboutDialog(ctk.CTkToplevel):
         card.pack(fill="both", expand=True, padx=22, pady=(0, 16))
 
         info_msg = (
-            "Spodo is een open-source muziekdownloader, gebouwd door Jente\n"
-            "in samenwerking met Google Gemini.\n\n"
-            "🧑‍💻 Jente (@jente509) — Projectbedenker (IT-student)\n"
-            "🤖 Google Gemini — Code architectuur & ontwikkeling\n\n"
-            "Gemaakt uit frustratie met haperende downloaders en bot-blokkades.\n"
-            "Veel luisterplezier! 🎧"
-            if get_language() == "nl" else
             "Spodo is an open-source Spotify downloader, built by Jente\n"
             "in collaboration with Google Gemini.\n\n"
             "🧑‍💻 Jente (@jente509) — Project Creator (IT Student)\n"
@@ -456,51 +440,34 @@ class SpotifyLoginHelpDialog(ctk.CTkToplevel):
 
     def __init__(self, parent, on_open_settings):
         super().__init__(parent)
-        is_nl = get_language() == "nl"
-        self.title("Spotify Inloggen Hulp" if is_nl else "Spotify Login Help")
+        self.title("Spotify Login Help")
         self.geometry("540x490")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
 
         ctk.CTkLabel(
-            self, text="🔑 Spotify Inloggen" if is_nl else "🔑 Spotify Login",
+            self, text="🔑 Spotify Login",
             font=ctk.CTkFont(size=20, weight="bold"), text_color=SPOTIFY_GREEN,
         ).pack(pady=(18, 4))
 
         card = ctk.CTkFrame(self, fg_color=CARD_BG, corner_radius=12)
         card.pack(fill="both", expand=True, padx=20, pady=(6, 16))
 
-        if is_nl:
-            tip_header = "💡 Tip: Inloggen is meestal NIET nodig!"
-            tip_body = (
-                "Voor openbare afspeellijsten, albums en tracks hoef je niet in te loggen.\n"
-                "Plak simpelweg een Spotify URL in de zoekbalk op het hoofdscherm!\n"
-            )
-            req_header = "Wanneer wél inloggen?"
-            req_body = (
-                "Alleen als je je eigen privé-afspeellijsten of 'Liked Songs' wilt ophalen.\n\n"
-                "Stappen om in te loggen:\n"
-                "1. Ga naar developer.spotify.com/dashboard en log in.\n"
-                "2. Maak een gratis app aan en voeg deze Redirect URI toe:\n"
-                "   http://127.0.0.1:3001/api/callback\n"
-                "3. Kopieer je Client ID & Client Secret naar Spodo Instellingen (⚙)."
-            )
-        else:
-            tip_header = "💡 Tip: Login is usually NOT required!"
-            tip_body = (
-                "For public playlists, albums, and tracks, no login is needed.\n"
-                "Simply paste any Spotify URL directly into the search bar!\n"
-            )
-            req_header = "When do you need to log in?"
-            req_body = (
-                "Only to access your personal private playlists or 'Liked Songs'.\n\n"
-                "Steps to log in:\n"
-                "1. Visit developer.spotify.com/dashboard and log in.\n"
-                "2. Create a free app and add this Redirect URI:\n"
-                "   http://127.0.0.1:3001/api/callback\n"
-                "3. Copy your Client ID & Client Secret into Spodo Settings (⚙)."
-            )
+        tip_header = "💡 Tip: Login is usually NOT required!"
+        tip_body = (
+            "For public playlists, albums, and tracks, no login is needed.\n"
+            "Simply paste any Spotify URL directly into the search bar!\n"
+        )
+        req_header = "When do you need to log in?"
+        req_body = (
+            "Only to access your personal private playlists or 'Liked Songs'.\n\n"
+            "Steps to log in:\n"
+            "1. Visit developer.spotify.com/dashboard and log in.\n"
+            "2. Create a free app and add this Redirect URI:\n"
+            "   http://127.0.0.1:3001/api/callback\n"
+            "3. Copy your Client ID & Client Secret into Spodo Settings (⚙)."
+        )
 
         ctk.CTkLabel(
             card, text=tip_header,
@@ -536,7 +503,7 @@ class SpotifyLoginHelpDialog(ctk.CTkToplevel):
             on_open_settings()
 
         ctk.CTkButton(
-            btn_row, text="⚙ Open Instellingen" if is_nl else "⚙ Open Settings",
+            btn_row, text="⚙ Open Settings",
             width=160, height=32,
             fg_color=SPOTIFY_GREEN, hover_color=SPOTIFY_GREEN_HOVER,
             command=open_settings_and_close,
@@ -586,16 +553,14 @@ class PlaylistPickerDialog(ctk.CTkToplevel):
                 font=ctk.CTkFont(size=13, weight="bold"), anchor="w",
                 text_color=TEXT_PRIMARY,
             ).pack(anchor="w")
-            num_suffix = "nummers" if get_language() == "nl" else "tracks"
             ctk.CTkLabel(
                 info_frame,
-                text=f"{pl['owner']}  •  {pl['tracks_total']} {num_suffix}",
+                text=f"{pl['owner']}  •  {pl['tracks_total']} tracks",
                 font=ctk.CTkFont(size=11), text_color=TEXT_SECONDARY, anchor="w",
             ).pack(anchor="w")
 
-            btn_txt = "Laden" if get_language() == "nl" else "Load"
             ctk.CTkButton(
-                frame, text=btn_txt, width=70, height=28,
+                frame, text="Load", width=70, height=28,
                 fg_color=SPOTIFY_GREEN, hover_color=SPOTIFY_GREEN_HOVER,
                 command=lambda p=pl: self._pick(p),
             ).pack(side="right", padx=10, pady=6)
@@ -612,10 +577,11 @@ class PlaylistPickerDialog(ctk.CTkToplevel):
 class TrackRow(ctk.CTkFrame):
     """Eén rij in de tracklist met checkbox, naam, album en duur."""
 
-    def __init__(self, parent, index: int, track: dict, **kwargs):
+    def __init__(self, parent, index: int, track: dict, on_toggle=None, **kwargs):
         super().__init__(parent, fg_color="transparent", height=32, **kwargs)
         self.track = track
         self.var = ctk.BooleanVar(value=True)
+        self.visible = True
 
         self.grid_columnconfigure(1, weight=3)
         self.grid_columnconfigure(2, weight=2)
@@ -624,6 +590,7 @@ class TrackRow(ctk.CTkFrame):
             self, variable=self.var, text="",
             width=24, checkbox_width=20, checkbox_height=20,
             fg_color=SPOTIFY_GREEN, hover_color=SPOTIFY_GREEN_HOVER,
+            command=on_toggle,
         )
         self.cb.grid(row=0, column=0, padx=(4, 2), sticky="w")
 
@@ -660,17 +627,17 @@ class SpodoApp(ctk.CTk):
 
         # State
         self.cfg = load_config()
-        # Activeer taal en appearance mode uit config
-        set_language(self.cfg.get("language", "nl"))
+        set_language("en")
         ctk.set_appearance_mode(self.cfg.get("appearance_mode", "dark"))
         self.sp_client: Optional[SpotifyClient] = None
         self.track_rows: list[TrackRow] = []
         self.current_tracks: list[dict] = []
+        self._failed_tracks: list[dict] = []
         self.collection_name: str = ""
         self.downloader: Optional[Downloader] = None
         self._downloading = False
         self._ffmpeg_downloading = False
-        self._tracks_loaded = False   # True zodra een fetch is uitgevoerd (ook als leeg)
+        self._tracks_loaded = False   # True once a fetch has been executed (even if empty)
 
         # Thread-safe queue voor UI updates vanuit achtergrondthreads
         self._ui_queue = queue.Queue()
@@ -829,7 +796,7 @@ class SpodoApp(ctk.CTk):
         )
         self._settings_btn.pack(side="right", padx=(2, 0))
 
-        # Thema toggle (Licht / Donker)
+        # Theme toggle (Light / Dark)
         cur_mode = ctk.get_appearance_mode().lower()
         theme_icon = "☀️" if cur_mode == "light" else "🌙"
         self._theme_btn = ctk.CTkButton(
@@ -839,16 +806,6 @@ class SpodoApp(ctk.CTk):
             command=self._toggle_theme,
         )
         self._theme_btn.pack(side="right", padx=2)
-
-        # Taal toggle (NL / EN)
-        lang_text = "🇬🇧 EN" if get_language() == "nl" else "🇳🇱 NL"
-        self._lang_btn = ctk.CTkButton(
-            btn_frame, text=lang_text, width=64, height=32,
-            fg_color="transparent", hover_color=ACCENT,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            command=self._toggle_language,
-        )
-        self._lang_btn.pack(side="right", padx=2)
 
         self._logout_btn = ctk.CTkButton(
             btn_frame, text=t("logout"), width=80, height=32,
@@ -886,11 +843,18 @@ class SpodoApp(ctk.CTk):
         self._dir_label.pack(side="left", padx=(6, 0))
 
         self._change_dir_btn = ctk.CTkButton(
-            row2, text=t("change_dir"), width=90, height=28,
+            row2, text=t("change_dir"), width=105, height=28,
             fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY,
             command=self._change_music_dir,
         )
-        self._change_dir_btn.pack(side="left", padx=10)
+        self._change_dir_btn.pack(side="left", padx=(10, 6))
+
+        self._open_folder_btn = ctk.CTkButton(
+            row2, text=t("open_folder"), width=110, height=28,
+            fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY,
+            command=self._open_music_folder,
+        )
+        self._open_folder_btn.pack(side="left", padx=(0, 10))
 
         self._cookie_btn = ctk.CTkButton(
             row2, text=self._get_cookie_btn_text(), width=160, height=28,
@@ -922,19 +886,10 @@ class SpodoApp(ctk.CTk):
         save_config(self.cfg)
         self._theme_btn.configure(text="☀️" if new_mode == "light" else "🌙")
 
-    def _toggle_language(self):
-        """Wissel direct tussen Nederlands en Engels."""
-        new_lang = "en" if get_language() == "nl" else "nl"
-        set_language(new_lang)
-        self.cfg["language"] = new_lang
-        save_config(self.cfg)
-        self._apply_translations()
-
     def _apply_translations(self):
-        """Werk alle zichtbare UI-elementen bij naar de geselecteerde taal."""
+        """Refresh visible UI strings."""
         self.title(t("app_title"))
         self._info_btn.configure(text=t("info_btn"))
-        self._lang_btn.configure(text="🇬🇧 EN" if get_language() == "nl" else "🇳🇱 NL")
         self._logout_btn.configure(text=t("logout"))
         if not (self.sp_client and self.sp_client.is_logged_in()):
             self._login_btn.configure(text=t("login_spotify"))
@@ -946,9 +901,11 @@ class SpodoApp(ctk.CTk):
         if not self.cfg.get("music_dir"):
             self._dir_label.configure(text=t("not_set"))
         self._change_dir_btn.configure(text=t("change_dir"))
+        self._open_folder_btn.configure(text=t("open_folder"))
         self._cookie_btn.configure(text=self._get_cookie_btn_text())
 
         self._url_entry.configure(placeholder_text=t("url_placeholder"))
+        self._paste_btn.configure(text=t("paste_btn"))
         self._fetch_btn.configure(text=t("fetch_btn"))
         self._playlists_btn.configure(text=t("my_playlists"))
         self._liked_btn.configure(text=t("liked_songs"))
@@ -958,15 +915,11 @@ class SpodoApp(ctk.CTk):
 
         if not self.current_tracks:
             if self._tracks_loaded:
-                # Fetch is uitgevoerd maar leverde niks op
-                no_results = "Geen nummers gevonden." if get_language() == "nl" else "No tracks found."
-                self._empty_label.configure(text=no_results)
+                self._empty_label.configure(text="No tracks found.")
             else:
-                # Initiële staat: nog niks opgehaald
                 self._empty_label.configure(text=t("empty_hint"))
         else:
-            num_suffix = "nummers" if get_language() == "nl" else "tracks"
-            self._track_count_label.configure(text=f"({len(self.current_tracks)} {num_suffix})")
+            self._track_count_label.configure(text=f"({len(self.current_tracks)} tracks)")
 
         if not self._downloading:
             self._download_btn.configure(text=t("download_btn"))
@@ -996,13 +949,21 @@ class SpodoApp(ctk.CTk):
         self._url_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
         self._url_entry.bind("<Return>", lambda e: self._fetch_url())
 
+        self._paste_btn = ctk.CTkButton(
+            url_frame, text=t("paste_btn"), width=85, height=38,
+            fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT_PRIMARY,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._paste_and_fetch,
+        )
+        self._paste_btn.grid(row=0, column=1, padx=(0, 8))
+
         self._fetch_btn = ctk.CTkButton(
             url_frame, text=t("fetch_btn"), width=110, height=38,
             fg_color=SPOTIFY_GREEN, hover_color=SPOTIFY_GREEN_HOVER,
             font=ctk.CTkFont(size=13, weight="bold"),
             command=self._fetch_url,
         )
-        self._fetch_btn.grid(row=0, column=1)
+        self._fetch_btn.grid(row=0, column=2)
 
         # Extra knoppen (ingelogd)
         self._extra_btns = ctk.CTkFrame(section, fg_color="transparent")
@@ -1038,8 +999,20 @@ class SpodoApp(ctk.CTk):
         )
         self._track_count_label.pack(side="left", padx=8)
 
+        self._selection_label = ctk.CTkLabel(
+            header, text="", font=ctk.CTkFont(size=11), text_color=SPOTIFY_GREEN,
+        )
+        self._selection_label.pack(side="left", padx=4)
+
         sel_frame = ctk.CTkFrame(header, fg_color="transparent")
         sel_frame.pack(side="right")
+
+        self._filter_entry = ctk.CTkEntry(
+            sel_frame, placeholder_text=t("filter_placeholder"),
+            width=230, height=26, font=ctk.CTkFont(size=11),
+        )
+        self._filter_entry.pack(side="left", padx=(0, 8))
+        self._filter_entry.bind("<KeyRelease>", lambda e: self._apply_track_filter())
 
         self._select_all_btn = ctk.CTkButton(
             sel_frame, text=t("select_all"), width=70, height=26,
@@ -1096,6 +1069,14 @@ class SpodoApp(ctk.CTk):
         )
         self._stop_btn.pack(side="left", padx=10)
 
+        self._retry_btn = ctk.CTkButton(
+            row1, text="", width=140, height=38,
+            fg_color="#d97706", hover_color="#b45309",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self._retry_failed,
+        )
+        # Packed only when failed tracks exist after a download
+
         self._clear_log_btn = ctk.CTkButton(
             row1, text=t("clear_log"), width=76, height=28,
             fg_color="transparent", hover_color=ACCENT, text_color=TEXT_SECONDARY,
@@ -1145,11 +1126,11 @@ class SpodoApp(ctk.CTk):
         except Exception as exc:
             err_msg = str(exc)
             if "10048" in err_msg or "Address already in use" in err_msg:
-                err_msg = "Poort 3001 is al in gebruik (mogelijk staat er nog een oud inlogvenster open)."
+                err_msg = "Port 3001 is already in use (another login window may still be open)."
             elif "invalid_client" in err_msg.lower():
-                err_msg = "Ongeldige Client ID of Client Secret. Controleer je Spotify Developer App gegevens."
+                err_msg = "Invalid Client ID or Client Secret. Check your Spotify Developer App credentials."
             elif "redirect" in err_msg.lower() and "mismatch" in err_msg.lower():
-                err_msg = "Redirect URI komt niet overeen met je Spotify Developer Dashboard (gebruik http://127.0.0.1:3001/api/callback)."
+                err_msg = "Redirect URI does not match your Spotify Developer Dashboard (use http://127.0.0.1:3001/api/callback)."
             self.ui_call(self._log, f"❌ Login error: {err_msg}")
             self.ui_call(lambda: self._login_btn.configure(state="normal", text=t("login_spotify")))
 
@@ -1179,17 +1160,37 @@ class SpodoApp(ctk.CTk):
     # ------------------------------------------------------------------
 
     def _change_music_dir(self):
-        title = "Kies downloadmap" if get_language() == "nl" else "Choose download folder"
         new_dir = filedialog.askdirectory(
-            title=title,
-            initialdir=self.cfg.get("music_dir") or str(__import__("pathlib").Path.home()),
+            title="Choose download folder",
+            initialdir=self.cfg.get("music_dir") or str(Path.home()),
         )
         if new_dir:
             self.cfg["music_dir"] = new_dir
             save_config(self.cfg)
             self._dir_label.configure(text=new_dir)
-            msg = f"📁 Downloadmap gewijzigd naar: {new_dir}" if get_language() == "nl" else f"📁 Download folder changed to: {new_dir}"
-            self._log(msg)
+            self._log(f"📁 Download folder changed to: {new_dir}")
+
+    def _open_music_folder(self):
+        """Open the latest output folder or configured download folder in the OS file explorer."""
+        target = None
+        if self.downloader and self.downloader.last_output_dir and self.downloader.last_output_dir.is_dir():
+            target = str(self.downloader.last_output_dir)
+        elif self.cfg.get("music_dir") and Path(self.cfg["music_dir"]).is_dir():
+            target = self.cfg["music_dir"]
+
+        if not target:
+            self._log("⚠️ No download folder set yet.")
+            return
+
+        try:
+            if sys.platform == "win32":
+                os.startfile(target)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", target])
+            else:
+                subprocess.Popen(["xdg-open", target])
+        except Exception as exc:
+            self._log(f"❌ Could not open folder: {exc}")
 
     # ------------------------------------------------------------------
     # Instellingen
@@ -1220,6 +1221,23 @@ class SpodoApp(ctk.CTk):
     # ------------------------------------------------------------------
     # URL ophalen
     # ------------------------------------------------------------------
+
+    def _paste_and_fetch(self):
+        """Paste a Spotify URL from clipboard and fetch immediately if it looks valid."""
+        if self._downloading:
+            return
+        try:
+            clip = self.clipboard_get().strip()
+        except Exception:
+            self._log("⚠️ Clipboard is empty or contains non-text data.")
+            return
+        if not clip:
+            self._log("⚠️ Clipboard is empty.")
+            return
+        self._url_entry.delete(0, "end")
+        self._url_entry.insert(0, clip)
+        if any(k in clip for k in ("open.spotify.com", "spotify:", "spotify.link", "spoti.fi")):
+            self._fetch_url()
 
     def _fetch_url(self):
         if self._downloading:
@@ -1265,7 +1283,7 @@ class SpodoApp(ctk.CTk):
 
     def _show_playlist_picker(self, playlists: list[dict]):
         if not playlists:
-            self._log("ℹ️ " + ("Geen playlists gevonden." if get_language() == "nl" else "No playlists found."))
+            self._log("ℹ️ No playlists found.")
             return
         PlaylistPickerDialog(self, playlists, self._on_playlist_picked)
 
@@ -1287,8 +1305,7 @@ class SpodoApp(ctk.CTk):
         try:
             name, tracks = self.sp_client.get_liked_songs()
             self.ui_call(self._populate_tracks, name, tracks)
-            msg = f"✅ {len(tracks)} Liked Songs geladen." if get_language() == "nl" else f"✅ Loaded {len(tracks)} Liked Songs."
-            self.ui_call(self._log, msg)
+            self.ui_call(self._log, f"✅ Loaded {len(tracks)} Liked Songs.")
         except Exception as exc:
             self.ui_call(self._log, t("playlist_error_log", error=exc))
         finally:
@@ -1301,96 +1318,145 @@ class SpodoApp(ctk.CTk):
     def _populate_tracks(self, name: str, tracks: list[dict]):
         self.collection_name = name
         self.current_tracks = tracks
+        self._failed_tracks = []
+        self._retry_btn.pack_forget()
         self._tracks_loaded = True
+        self._filter_entry.delete(0, "end")
 
-        # Verwijder alleen TrackRow-widgets (laat _empty_box intact)
+        # Remove only TrackRow widgets (keep _empty_box intact)
         for row in self.track_rows:
             row.pack_forget()
             row.destroy()
         self.track_rows.clear()
 
         if not tracks:
-            # Toon de lege-staat met "geen nummers gevonden"-tekst
-            no_results = "Geen nummers gevonden." if get_language() == "nl" else "No tracks found."
-            self._empty_label.configure(text=no_results)
+            self._empty_label.configure(text="No tracks found.")
             self._empty_box.pack(pady=45)
             self._download_btn.configure(state="disabled")
             self._collection_label.configure(text="")
             self._track_count_label.configure(text="")
+            self._selection_label.configure(text="")
             return
 
-        # Verberg de lege staat
+        # Hide empty state
         self._empty_box.pack_forget()
 
         self._collection_label.configure(text=f"🎶 {name}")
-        num_suffix = "nummers" if get_language() == "nl" else "tracks"
-        self._track_count_label.configure(text=f"({len(tracks)} {num_suffix})")
+        self._track_count_label.configure(text=f"({len(tracks)} tracks)")
 
-        # Chunked / batch rendering zodat grote playlists (500 - 3000 nummers)
-        # de gebruikersinterface niet laten bevriezen.
+        # Chunked / batch rendering so large playlists (500 - 3000 tracks)
+        # do not freeze the UI.
         chunk_size = 35
 
         def _render_chunk(start_idx: int):
-            # Controleer of de tracks ondertussen niet vervangen zijn
             if self.current_tracks is not tracks:
                 return
 
             end_idx = min(start_idx + chunk_size, len(tracks))
             for i in range(start_idx, end_idx):
                 trk = tracks[i]
-                row = TrackRow(self._track_scroll, index=i + 1, track=trk)
+                row = TrackRow(
+                    self._track_scroll,
+                    index=i + 1,
+                    track=trk,
+                    on_toggle=self._update_selection_status,
+                )
                 row.pack(fill="x", pady=1)
                 self.track_rows.append(row)
 
             if end_idx < len(tracks):
                 self.after(5, _render_chunk, end_idx)
             else:
+                self._update_selection_status()
                 if not self._ffmpeg_downloading and not self._downloading:
                     self._download_btn.configure(state="normal")
 
-        # Start de eerste batch en schakel downloadknop in zodra alle rijen geladen zijn
         self._download_btn.configure(state="disabled")
         _render_chunk(0)
 
     # ------------------------------------------------------------------
-    # Selectie
+    # Selection & Filtering
     # ------------------------------------------------------------------
+
+    def _apply_track_filter(self):
+        """Filter visible track rows by title, artist, or album."""
+        query = self._filter_entry.get().strip().lower()
+        for row in self.track_rows:
+            if not query:
+                show = True
+            else:
+                haystack = (
+                    f"{row.track.get('name', '')} "
+                    f"{row.track.get('artists', '')} "
+                    f"{row.track.get('album', '')}"
+                ).lower()
+                show = query in haystack
+
+            if show and not row.visible:
+                row.pack(fill="x", pady=1)
+                row.visible = True
+            elif not show and row.visible:
+                row.pack_forget()
+                row.visible = False
+
+    def _update_selection_status(self):
+        """Update selected tracks count and total duration label."""
+        total = len(self.track_rows)
+        if total == 0:
+            self._selection_label.configure(text="")
+            return
+        selected_rows = [r for r in self.track_rows if r.var.get()]
+        total_ms = sum(r.track.get("duration_ms", 0) or 0 for r in selected_rows)
+        total_sec = total_ms // 1000
+        hours = total_sec // 3600
+        mins = (total_sec % 3600) // 60
+        secs = total_sec % 60
+        dur_str = f"{hours}h {mins:02d}m" if hours else f"{mins}:{secs:02d}"
+        self._selection_label.configure(
+            text=t("selected_status", selected=len(selected_rows), total=total, duration=dur_str)
+        )
 
     def _select_all(self):
         for row in self.track_rows:
-            row.var.set(True)
+            if row.visible:
+                row.var.set(True)
+        self._update_selection_status()
 
     def _deselect_all(self):
         for row in self.track_rows:
-            row.var.set(False)
+            if row.visible:
+                row.var.set(False)
+        self._update_selection_status()
 
     # ------------------------------------------------------------------
     # Download
     # ------------------------------------------------------------------
 
-    def _start_download(self):
-        # Muziekmap controleren
+    def _start_download(self, tracks_override: Optional[list[dict]] = None):
+        if self._downloading:
+            return
         if not self.cfg.get("music_dir"):
-            warn = "⚠️ Stel eerst een downloadmap in via 'Wijzig map'." if get_language() == "nl" else "⚠️ Please select a download folder first via 'Change folder'."
-            self._log(warn)
+            self._log("⚠️ Please select a download folder first via 'Change folder'.")
             self._change_music_dir()
             if not self.cfg.get("music_dir"):
                 return
 
-        # Geselecteerde tracks verzamelen
-        selected = [row.track for row in self.track_rows if row.var.get()]
+        selected = tracks_override if tracks_override is not None else [
+            row.track for row in self.track_rows if row.var.get()
+        ]
         if not selected:
-            warn = "⚠️ Selecteer minstens één nummer om te downloaden." if get_language() == "nl" else "⚠️ Please select at least one track to download."
-            self._log(warn)
+            self._log("⚠️ Please select at least one track to download.")
             return
 
         self._downloading = True
+        self._failed_tracks = []
+        self._retry_btn.pack_forget()
         self._download_btn.configure(state="disabled")
         self._stop_btn.configure(state="normal")
         self._fetch_btn.configure(state="disabled")
+        self._paste_btn.configure(state="disabled")
         self._progress_bar.set(0)
-        progress_txt = f"0 / {len(selected)} " + ("gedownload" if get_language() == "nl" else "downloaded")
-        self._progress_label.configure(text=progress_txt)
+        self._progress_label.configure(text=f"0 / {len(selected)} downloaded")
         self._log(t("download_started_log", count=len(selected), name=self.collection_name))
 
         self.downloader = Downloader(
@@ -1407,6 +1473,14 @@ class SpodoApp(ctk.CTk):
             args=(selected, self.collection_name),
             daemon=True,
         ).start()
+
+    def _retry_failed(self):
+        """Retry downloading only the tracks that failed in the previous run."""
+        if not self._failed_tracks or self._downloading:
+            return
+        tracks_to_retry = list(self._failed_tracks)
+        self._log(f"🔁 Retrying {len(tracks_to_retry)} failed tracks...")
+        self._start_download(tracks_override=tracks_to_retry)
 
     def _download_worker(self, tracks: list[dict], name: str):
         self.downloader.download_tracks(
@@ -1425,16 +1499,25 @@ class SpodoApp(ctk.CTk):
     def _update_progress(self, completed: int, failed: int, total: int):
         fraction = (completed + failed) / total if total else 0
         self._progress_bar.set(fraction)
-        dl_word = "gedownload" if get_language() == "nl" else "downloaded"
-        fail_word = "mislukt" if get_language() == "nl" else "failed"
-        self._progress_label.configure(text=f"{completed} / {total} {dl_word}" + (f" ({failed} {fail_word})" if failed else ""))
+        self._progress_label.configure(
+            text=f"{completed} / {total} downloaded" + (f" ({failed} failed)" if failed else "")
+        )
 
     def _on_download_complete(self, completed: int, failed: int, total: int):
         self._downloading = False
         self._download_btn.configure(state="normal")
         self._stop_btn.configure(state="disabled")
         self._fetch_btn.configure(state="normal")
+        self._paste_btn.configure(state="normal")
         self._progress_bar.set(1.0 if not failed else (completed / total if total else 0))
+
+        if self.downloader and self.downloader.failed_tracks:
+            self._failed_tracks = list(self.downloader.failed_tracks)
+            self._retry_btn.configure(text=t("retry_failed_btn", count=len(self._failed_tracks)))
+            self._retry_btn.pack(side="left", padx=(0, 6))
+        else:
+            self._failed_tracks = []
+            self._retry_btn.pack_forget()
 
     # ------------------------------------------------------------------
     # Logging

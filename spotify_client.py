@@ -59,7 +59,7 @@ class SpotifyClient:
         Gooit een exception als de flow faalt.
         """
         if not self.client_id or not self.client_secret:
-            raise ValueError("Client ID en Client Secret zijn vereist om in te loggen.")
+            raise ValueError("Client ID and Client Secret are required to log in.")
         try:
             auth_manager = self._build_oauth(open_browser=True)
             sp = spotipy.Spotify(auth_manager=auth_manager, requests_timeout=20)
@@ -111,7 +111,7 @@ class SpotifyClient:
 
     def get_display_name(self) -> str:
         if self.user_info:
-            return self.user_info.get("display_name") or self.user_info.get("id", "Gebruiker")
+            return self.user_info.get("display_name") or self.user_info.get("id", "User")
         return ""
 
     # ------------------------------------------------------------------
@@ -254,7 +254,7 @@ class SpotifyClient:
         r.raise_for_status()
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.DOTALL)
         if not m:
-            raise ValueError(f"Kon playlist {playlist_id} niet ophalen (pagina onbereikbaar).")
+            raise ValueError(f"Could not fetch playlist {playlist_id} (page unreachable).")
         data = json.loads(m.group(1))
         entity = ((data.get("props") or {}).get("pageProps") or {}).get("state", {}).get("data", {}).get("entity") or {}
         name = entity.get("name") or entity.get("title") or "Playlist"
@@ -283,7 +283,7 @@ class SpotifyClient:
                 "release_date": "",
             })
         if not tracks:
-            raise ValueError(f"Geen nummers gevonden in playlist {playlist_id}.")
+            raise ValueError(f"No tracks found in playlist {playlist_id}.")
         return name, tracks
 
     def _scrape_album(self, album_id: str) -> tuple[str, list[dict]]:
@@ -327,7 +327,7 @@ class SpotifyClient:
         r.raise_for_status()
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.DOTALL)
         if not m:
-            raise ValueError(f"Kon album {album_id} niet ophalen.")
+            raise ValueError(f"Could not fetch album {album_id}.")
         data = json.loads(m.group(1))
         entity = ((data.get("props") or {}).get("pageProps") or {}).get("state", {}).get("data", {}).get("entity") or {}
         album_name = entity.get("name") or entity.get("title") or "Album"
@@ -396,7 +396,7 @@ class SpotifyClient:
         r.raise_for_status()
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.DOTALL)
         if not m:
-            raise ValueError(f"Kon track {track_id} niet ophalen.")
+            raise ValueError(f"Could not fetch track {track_id}.")
         data = json.loads(m.group(1))
         entity = ((data.get("props") or {}).get("pageProps") or {}).get("state", {}).get("data", {}).get("entity") or {}
         title = entity.get("name") or entity.get("title") or "Track"
@@ -487,7 +487,7 @@ class SpotifyClient:
     def get_liked_songs(self) -> tuple[str, list[dict]]:
         """Haal de 'Liked Songs' van de ingelogde gebruiker op."""
         if not self.is_logged_in():
-            raise PermissionError("Je moet ingelogd zijn om Liked Songs op te halen.")
+            raise PermissionError("You must be logged in to fetch Liked Songs.")
         try:
             page = self.sp.current_user_saved_tracks(limit=50)
             tracks = self._paginate(
@@ -499,15 +499,15 @@ class SpotifyClient:
             )
         except Exception as exc:
             raise RuntimeError(
-                f"Kon Liked Songs niet ophalen via Spotify API: {exc}\n"
-                "Controleer je internetverbinding of log opnieuw in."
+                f"Could not fetch Liked Songs via Spotify API: {exc}\n"
+                "Check your internet connection or log in again."
             ) from exc
         return "Liked Songs", tracks
 
     def get_user_playlists(self) -> list[dict]:
         """Haal alle playlists van de ingelogde gebruiker op."""
         if not self.is_logged_in():
-            raise PermissionError("Je moet ingelogd zijn om playlists op te halen.")
+            raise PermissionError("You must be logged in to fetch playlists.")
         playlists = []
         try:
             page = self.sp.current_user_playlists(limit=50)
@@ -528,8 +528,8 @@ class SpotifyClient:
                 page = self.sp.next(page) if page.get("next") else None
         except Exception as exc:
             raise RuntimeError(
-                f"Kon playlists niet ophalen via Spotify API: {exc}\n"
-                "Controleer je internetverbinding of log opnieuw in."
+                f"Could not fetch playlists via Spotify API: {exc}\n"
+                "Check your internet connection or log in again."
             ) from exc
         return playlists
 
@@ -563,6 +563,6 @@ class SpotifyClient:
             return self.get_track(content_id)
         else:
             raise ValueError(
-                "Ongeldige Spotify URL. Gebruik een link naar een playlist, album of track.\n"
-                f"Ontvangen: {url}"
+                "Invalid Spotify URL. Please use a link to a playlist, album, or track.\n"
+                f"Received: {url}"
             )
