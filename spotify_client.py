@@ -42,46 +42,64 @@ class SpotifyClient:
         except Exception:
             self.sp = None
 
+    def _build_oauth(self, open_browser: bool = False) -> SpotifyOAuth:
+        """Maak een geconfigureerde SpotifyOAuth manager."""
+        return SpotifyOAuth(
+            client_id=self.client_id,
+            client_secret=self.client_secret,
+            redirect_uri=self.redirect_uri or "http://127.0.0.1:3001/api/callback",
+            scope="playlist-read-private playlist-read-collaborative user-library-read",
+            cache_path=SPOTIFY_CACHE_PATH,
+            open_browser=open_browser,
+        )
+
     def login_oauth(self) -> dict:
         """
         Start OAuth-flow (opent browser). Retourneert user-info dict.
         Gooit een exception als de flow faalt.
         """
-        auth_manager = SpotifyOAuth(
-            client_id=self.client_id,
-            client_secret=self.client_secret,
-            redirect_uri=self.redirect_uri,
-            scope="playlist-read-private playlist-read-collaborative user-library-read",
-            cache_path=SPOTIFY_CACHE_PATH,
-            open_browser=True,
-        )
-        self.sp = spotipy.Spotify(auth_manager=auth_manager, requests_timeout=20)
-        self.user_info = self.sp.current_user()
-        return self.user_info
+        if not self.client_id or not self.client_secret:
+            raise ValueError("Client ID en Client Secret zijn vereist om in te loggen.")
+        try:
+            auth_manager = self._build_oauth(open_browser=True)
+            sp = spotipy.Spotify(auth_manager=auth_manager, requests_timeout=20)
+            user_info = sp.current_user()
+            self.sp = sp
+            self.user_info = user_info
+            return self.user_info
+        except Exception:
+            self._init_public()
+            raise
 
     def try_restore_session(self) -> bool:
         """Probeer een eerder opgeslagen OAuth-token te hergebruiken (zonder browser)."""
+        if not self.client_id or not self.client_secret:
+            return False
+        import os
+        if not os.path.exists(SPOTIFY_CACHE_PATH):
+            return False
         try:
-            auth_manager = SpotifyOAuth(
-                client_id=self.client_id,
-                client_secret=self.client_secret,
-                redirect_uri=self.redirect_uri,
-                scope="playlist-read-private playlist-read-collaborative user-library-read",
-                cache_path=SPOTIFY_CACHE_PATH,
-                open_browser=False,
-            )
+            auth_manager = self._build_oauth(open_browser=False)
             token_info = auth_manager.get_cached_token()
             if token_info:
-                self.sp = spotipy.Spotify(auth_manager=auth_manager, requests_timeout=20)
-                self.user_info = self.sp.current_user()
+                sp = spotipy.Spotify(auth_manager=auth_manager, requests_timeout=20)
+                user_info = sp.current_user()
+                self.sp = sp
+                self.user_info = user_info
                 return True
         except Exception:
-            pass
+            # Verwijder corrupte of verlopen cache zodat volgende login schoon start
+            try:
+                os.remove(SPOTIFY_CACHE_PATH)
+            except OSError:
+                pass
+            self._init_public()
         return False
 
     def logout(self) -> None:
         """Log uit en keer terug naar publieke modus."""
         import os
+        self.user_info = None
         try:
             os.remove(SPOTIFY_CACHE_PATH)
         except FileNotFoundError:
@@ -119,7 +137,12 @@ class SpotifyClient:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _track_dict(track: dict, album_name: str = "", album_art: str = "") -> dict:
+    def _track_dict(
+        track: dict,
+        album_name: str = "",
+        album_art: str = "",
+        release_date: str = "",
+    ) -> dict:
         """Maak een genormaliseerd track-woordenboek met alle benodigde metadata."""
         if not track or not isinstance(track, dict) or not track.get("id"):
             return {}
@@ -163,7 +186,7 @@ class SpotifyClient:
             "url": spotify_url,
             "duration_ms": track.get("duration_ms") or 0,
             "track_number": track.get("track_number") or 0,
-            "release_date": album_obj.get("release_date") or "",
+            "release_date": release_date or album_obj.get("release_date") or "",
         }
 
     def _paginate(self, page: dict, extract_track) -> list[dict]:
@@ -228,15 +251,16 @@ class SpotifyClient:
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
             timeout=15,
         )
+        r.raise_for_status()
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.DOTALL)
         if not m:
             raise ValueError(f"Kon playlist {playlist_id} niet ophalen (pagina onbereikbaar).")
         data = json.loads(m.group(1))
-        entity = data.get("props", {}).get("pageProps", {}).get("state", {}).get("data", {}).get("entity", {})
+        entity = ((data.get("props") or {}).get("pageProps") or {}).get("state", {}).get("data", {}).get("entity") or {}
         name = entity.get("name") or entity.get("title") or "Playlist"
         cover_art = ""
-        sources = entity.get("coverArt", {}).get("sources", [])
-        if sources and sources[0].get("url"):
+        sources = (entity.get("coverArt") or {}).get("sources") or []
+        if sources and isinstance(sources[0], dict) and sources[0].get("url"):
             cover_art = sources[0]["url"]
 
         tracks = []
@@ -300,15 +324,16 @@ class SpotifyClient:
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
             timeout=15,
         )
+        r.raise_for_status()
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.DOTALL)
         if not m:
             raise ValueError(f"Kon album {album_id} niet ophalen.")
         data = json.loads(m.group(1))
-        entity = data.get("props", {}).get("pageProps", {}).get("state", {}).get("data", {}).get("entity", {})
+        entity = ((data.get("props") or {}).get("pageProps") or {}).get("state", {}).get("data", {}).get("entity") or {}
         album_name = entity.get("name") or entity.get("title") or "Album"
         cover_art = ""
-        visual = entity.get("visualIdentity", {}).get("image", [])
-        if visual and visual[0].get("url"):
+        visual = (entity.get("visualIdentity") or {}).get("image") or []
+        if visual and isinstance(visual[0], dict) and visual[0].get("url"):
             cover_art = visual[0]["url"]
 
         tracks = []
@@ -368,17 +393,18 @@ class SpotifyClient:
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
             timeout=15,
         )
+        r.raise_for_status()
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.DOTALL)
         if not m:
             raise ValueError(f"Kon track {track_id} niet ophalen.")
         data = json.loads(m.group(1))
-        entity = data.get("props", {}).get("pageProps", {}).get("state", {}).get("data", {}).get("entity", {})
+        entity = ((data.get("props") or {}).get("pageProps") or {}).get("state", {}).get("data", {}).get("entity") or {}
         title = entity.get("name") or entity.get("title") or "Track"
-        artists_list = [a.get("name") for a in entity.get("artists", []) if a.get("name")]
+        artists_list = [a.get("name") for a in (entity.get("artists") or []) if isinstance(a, dict) and a.get("name")]
         artists = ", ".join(artists_list) if artists_list else "Onbekend"
         cover_art = ""
-        visual = entity.get("visualIdentity", {}).get("image", [])
-        if visual and visual[0].get("url"):
+        visual = (entity.get("visualIdentity") or {}).get("image") or []
+        if visual and isinstance(visual[0], dict) and visual[0].get("url"):
             cover_art = visual[0]["url"]
         td = {
             "id": track_id,
@@ -424,8 +450,9 @@ class SpotifyClient:
             try:
                 album = self.sp.album(album_id)
                 album_name = album.get("name", "Album")
-                album_images = album.get("images", [])
-                album_art = album_images[0]["url"] if album_images else ""
+                album_images = album.get("images") or []
+                album_art = album_images[0]["url"] if album_images and isinstance(album_images[0], dict) else ""
+                album_release = str(album.get("release_date") or "")
                 tracks_obj = album.get("tracks") or album.get("items")
                 tracks = self._paginate(
                     tracks_obj,
@@ -433,6 +460,7 @@ class SpotifyClient:
                         item.get("item") or item.get("track") or item if isinstance(item, dict) else {},
                         album_name,
                         album_art,
+                        album_release,
                     ),
                 )
                 if tracks:
@@ -481,22 +509,52 @@ class SpotifyClient:
         if not self.is_logged_in():
             raise PermissionError("Je moet ingelogd zijn om playlists op te halen.")
         playlists = []
-        page = self.sp.current_user_playlists(limit=50)
-        while page:
-            for item in page.get("items", []):
-                playlists.append({
-                    "id": item["id"],
-                    "name": item["name"],
-                    "owner": item.get("owner", {}).get("display_name", ""),
-                    "tracks_total": item.get("tracks", {}).get("total", 0),
-                    "url": item.get("external_urls", {}).get("spotify", ""),
-                })
-            page = self.sp.next(page) if page.get("next") else None
+        try:
+            page = self.sp.current_user_playlists(limit=50)
+            while page:
+                for item in page.get("items") or []:
+                    if not item or not isinstance(item, dict):
+                        continue
+                    owner_obj = item.get("owner") or {}
+                    tracks_obj = item.get("tracks") or item.get("items") or {}
+                    ext_urls = item.get("external_urls") or {}
+                    playlists.append({
+                        "id": item.get("id", ""),
+                        "name": item.get("name") or "Playlist",
+                        "owner": owner_obj.get("display_name", "") if isinstance(owner_obj, dict) else "",
+                        "tracks_total": tracks_obj.get("total", 0) if isinstance(tracks_obj, dict) else 0,
+                        "url": ext_urls.get("spotify", "") if isinstance(ext_urls, dict) else "",
+                    })
+                page = self.sp.next(page) if page.get("next") else None
+        except Exception as exc:
+            raise RuntimeError(
+                f"Kon playlists niet ophalen via Spotify API: {exc}\n"
+                "Controleer je internetverbinding of log opnieuw in."
+            ) from exc
         return playlists
+
+    @staticmethod
+    def _resolve_shortlink(url: str) -> str:
+        """Volg Spotify-shortlinks (spotify.link / spoti.fi) naar de echte open.spotify.com URL."""
+        if "spotify.link" in url or "spoti.fi" in url:
+            try:
+                import requests
+                resp = requests.get(
+                    url,
+                    allow_redirects=True,
+                    timeout=10,
+                    headers={"User-Agent": "Mozilla/5.0"},
+                )
+                if resp.url and "open.spotify.com" in resp.url:
+                    return resp.url
+            except Exception:
+                pass
+        return url
 
     def fetch_from_url(self, url: str) -> tuple[str, list[dict]]:
         """Haal tracks op gebaseerd op een Spotify URL. Retourneert (naam, [tracks])."""
-        content_type, content_id = self.parse_url(url)
+        resolved_url = self._resolve_shortlink(url.strip())
+        content_type, content_id = self.parse_url(resolved_url)
         if content_type == "playlist":
             return self.get_playlist_tracks(content_id)
         elif content_type == "album":

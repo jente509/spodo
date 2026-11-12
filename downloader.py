@@ -169,12 +169,21 @@ def ensure_ffmpeg(on_log: Optional[Callable[[str], None]] = None) -> Optional[st
 # ══════════════════════════════════════════════════════════════════
 
 _INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_RESERVED_WIN_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
 
 
 def _sanitize_filename(name: str) -> str:
-    """Verwijder ongeldige tekens uit bestandsnamen."""
+    """Verwijder ongeldige tekens en gereserveerde Windows-namen uit bestandsnamen."""
     cleaned = _INVALID_CHARS.sub("", name).strip(". ")
-    return cleaned[:200] if cleaned else "unknown"
+    if not cleaned:
+        return "unknown"
+    if cleaned.upper() in _RESERVED_WIN_NAMES:
+        cleaned = f"_{cleaned}"
+    return cleaned[:200]
 
 
 def _clean_ansi(text: str) -> str:
@@ -448,10 +457,6 @@ def resolve_cookie_opts(cookie_source: str = "none", cookie_file: str = "") -> d
         # Als extraheren mislukt (bijv. DPAPI fout onder Windows bij Chromium of browser open):
         # Val NIET terug op 'cookiesfrombrowser', want dat leidt tot fatale DPAPI fouten op elk nummer.
         return {}
-
-    # 3. Geen browser gekozen ('none'), maar standaard cookiebestand is wel aanwezig
-    if default_cookies.exists() and default_cookies.stat().st_size > 0:
-        return {"cookiefile": str(default_cookies)}
 
     return {}
 
@@ -771,6 +776,17 @@ class Downloader:
 def test_youtube_auth(cookie_source: str = "none", cookie_file: str = "") -> tuple[bool, str]:
     """Test of YouTube-toegang werkt met de opgegeven cookie-instelling."""
     cookie_source = (cookie_source or "none").lower()
+
+    if cookie_source == "file":
+        if not cookie_file or not Path(cookie_file).exists():
+            return False, "Gekozen cookies.txt bestand bestaat niet."
+    elif cookie_source in ("brave", "chrome", "edge", "firefox", "opera", "safari", "vivaldi"):
+        default_cookies = CONFIG_DIR / "youtube_cookies.txt"
+        if not (default_cookies.exists() and default_cookies.stat().st_size > 0):
+            ok_sync, sync_msg, _ = sync_browser_cookies(cookie_source)
+            if not ok_sync:
+                return False, sync_msg
+
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,

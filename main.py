@@ -295,10 +295,13 @@ class SettingsDialog(ctk.CTkToplevel):
         def worker():
             ok, msg, count = sync_browser_cookies(val)
             def update():
+                if not self.winfo_exists():
+                    return
                 self._sync_btn.configure(state="normal", text=t("sync_browser", browser=val.capitalize()))
                 color = SPOTIFY_GREEN if ok else "#f39c12"
                 self._sync_status.configure(text=msg, text_color=color)
-            self.after(0, update)
+            if self.winfo_exists():
+                self.after(0, update)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -344,15 +347,20 @@ class SettingsDialog(ctk.CTkToplevel):
         def worker():
             ok, msg = test_youtube_auth(src, cf)
             color = SPOTIFY_GREEN if ok else "#e74c3c"
-            self.after(0, lambda: self._test_result_label.configure(text=msg, text_color=color))
-            self.after(0, lambda: self._test_btn.configure(state="normal", text=t("test_connection")))
+            def update():
+                if not self.winfo_exists():
+                    return
+                self._test_result_label.configure(text=msg, text_color=color)
+                self._test_btn.configure(state="normal", text=t("test_connection"))
+            if self.winfo_exists():
+                self.after(0, update)
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _save(self):
         self._config["client_id"] = self._id_entry.get().strip()
         self._config["client_secret"] = self._secret_entry.get().strip()
-        self._config["redirect_uri"] = self._uri_entry.get().strip()
+        self._config["redirect_uri"] = self._uri_entry.get().strip() or "http://127.0.0.1:3001/api/callback"
         self._config["output_format"] = self._format_var.get()
         self._config["bitrate"] = self._bitrate_var.get()
         try:
@@ -661,6 +669,7 @@ class SpodoApp(ctk.CTk):
         self.collection_name: str = ""
         self.downloader: Optional[Downloader] = None
         self._downloading = False
+        self._ffmpeg_downloading = False
         self._tracks_loaded = False   # True zodra een fetch is uitgevoerd (ook als leeg)
 
         # Thread-safe queue voor UI updates vanuit achtergrondthreads
@@ -762,6 +771,7 @@ class SpodoApp(ctk.CTk):
 
     def _set_ffmpeg_downloading(self, downloading: bool):
         """Schakel de download-knop in/uit tijdens FFmpeg-installatie."""
+        self._ffmpeg_downloading = downloading
         if downloading:
             self._download_btn.configure(
                 state="disabled",
@@ -770,7 +780,7 @@ class SpodoApp(ctk.CTk):
             self._log(t("ffmpeg_downloading"))
         else:
             # Herstel de knop — alleen inschakelen als er tracks geselecteerd zijn
-            if self.current_tracks:
+            if self.current_tracks and not self._downloading:
                 self._download_btn.configure(state="normal", text=t("download_btn"))
             else:
                 self._download_btn.configure(state="disabled", text=t("download_btn"))
@@ -1133,7 +1143,14 @@ class SpodoApp(ctk.CTk):
             name = self.sp_client.get_display_name()
             self.ui_call(self._log, t("login_ok", name=name))
         except Exception as exc:
-            self.ui_call(self._log, f"❌ Login error: {exc}")
+            err_msg = str(exc)
+            if "10048" in err_msg or "Address already in use" in err_msg:
+                err_msg = "Poort 3001 is al in gebruik (mogelijk staat er nog een oud inlogvenster open)."
+            elif "invalid_client" in err_msg.lower():
+                err_msg = "Ongeldige Client ID of Client Secret. Controleer je Spotify Developer App gegevens."
+            elif "redirect" in err_msg.lower() and "mismatch" in err_msg.lower():
+                err_msg = "Redirect URI komt niet overeen met je Spotify Developer Dashboard (gebruik http://127.0.0.1:3001/api/callback)."
+            self.ui_call(self._log, f"❌ Login error: {err_msg}")
             self.ui_call(lambda: self._login_btn.configure(state="normal", text=t("login_spotify")))
 
     def _logout_spotify(self):
@@ -1185,10 +1202,17 @@ class SpodoApp(ctk.CTk):
         AboutDialog(self)
 
     def _on_settings_saved(self, new_cfg: dict):
+        creds_changed = (
+            self.sp_client is None
+            or new_cfg.get("client_id", "") != self.sp_client.client_id
+            or new_cfg.get("client_secret", "") != self.sp_client.client_secret
+            or new_cfg.get("redirect_uri", "") != self.sp_client.redirect_uri
+        )
         self.cfg = new_cfg
         self._apply_translations()
-        self._init_spotify_client()
-        self._refresh_login_ui()
+        if creds_changed:
+            self._init_spotify_client()
+            self._refresh_login_ui()
         if hasattr(self, "_cookie_btn"):
             self._cookie_btn.configure(text=self._get_cookie_btn_text())
         self._log(t("settings_saved_log"))
@@ -1198,6 +1222,8 @@ class SpodoApp(ctk.CTk):
     # ------------------------------------------------------------------
 
     def _fetch_url(self):
+        if self._downloading:
+            return
         url = self._url_entry.get().strip()
         if not url:
             self._log(t("enter_url_warn"))
@@ -1221,6 +1247,8 @@ class SpodoApp(ctk.CTk):
     # ------------------------------------------------------------------
 
     def _load_my_playlists(self):
+        if self._downloading:
+            return
         self._playlists_btn.configure(state="disabled", text=t("fetching"))
         self._log(t("loading_playlists_log"))
         threading.Thread(target=self._playlists_worker, daemon=True).start()
@@ -1249,6 +1277,8 @@ class SpodoApp(ctk.CTk):
             self._fetch_url()
 
     def _load_liked_songs(self):
+        if self._downloading:
+            return
         self._liked_btn.configure(state="disabled", text=t("fetching"))
         self._log("❤️ Liked Songs...")
         threading.Thread(target=self._liked_worker, daemon=True).start()
@@ -1315,10 +1345,11 @@ class SpodoApp(ctk.CTk):
             if end_idx < len(tracks):
                 self.after(5, _render_chunk, end_idx)
             else:
-                self._download_btn.configure(state="normal")
+                if not self._ffmpeg_downloading and not self._downloading:
+                    self._download_btn.configure(state="normal")
 
-        # Start de eerste batch direct en schakel downloadknop alvast in
-        self._download_btn.configure(state="normal")
+        # Start de eerste batch en schakel downloadknop in zodra alle rijen geladen zijn
+        self._download_btn.configure(state="disabled")
         _render_chunk(0)
 
     # ------------------------------------------------------------------
